@@ -12,9 +12,11 @@ import logging
 logging.basicConfig(filename="fitting.log", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-INPUT_FILE = Path("/home/moritz/SCME/fitting/input/fitted_energies.hdf5")
-INITIAL_PARAMS_FILE = Path("./input/params.hdf5")
-OUTPUT_FILE = Path("./output/params.hdf5")
+FILE_PATH = Path(__file__).parent
+
+INPUT_FILE = FILE_PATH / "input/fitted_energies.hdf5"
+INITIAL_PARAMS_FILE = FILE_PATH / "input/params.hdf5"
+OUTPUT_FILE = FILE_PATH / "output/params.hdf5"
 
 PLOT_DIR = Path("./plots")
 logger.info(f"{INPUT_FILE = }")
