@@ -6,11 +6,16 @@ import functools
 import matplotlib.pyplot as plt
 import h5py
 from pathlib import Path
-
 import logging
+from pint import UnitRegistry, Quantity
 
+ureg = UnitRegistry()
 logging.basicConfig(filename="fitting.log", level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ===============================================
+#                 Begin: SETUP
+# ===============================================
 
 FILE_PATH = Path(__file__).parent
 
@@ -23,8 +28,8 @@ logger.info(f"{INPUT_FILE = }")
 logger.info(f"{OUTPUT_FILE = }")
 logger.info(f"{PLOT_DIR = }")
 
-R_E = 0.97109
-THETA_E = 104.140
+R_E = 0.97109 * ureg.angstrom
+THETA_E = 104.140 * ureg.deg
 EXPONENT_SUM_MAX = 4
 EXPONENT_MAX = 5
 SKIP_ZERO = True
@@ -37,7 +42,7 @@ logger.info(f"{EXPONENT_MAX = }")
 logger.info(f"{SKIP_ZERO = }")
 logger.info(f"{FRACT_TEST = }")
 
-NUM_EPOCHS = int(1e6)
+NUM_EPOCHS = int(1e1)
 N_EPOCH_LOG = 5000
 INITIAL_LR = 1e-1
 TRANSITION_STEPS = 1000
@@ -56,62 +61,58 @@ logger.info(f"{DECAY_RATE = }")
 logger.info(f"{TRANSITION_STEPS = }")
 
 
+# ===============================================
+#                 End: SETUP
+# ===============================================
+
+
+def get_pint_quantity_from_dataset(dataset: h5py.Dataset):
+    if "units" in dataset.attrs:
+        unit_str = str(dataset.attrs["units"])
+    else:
+        unit_str = "None"
+
+    return np.array(dataset) * ureg.parse_expression(unit_str)
+
+
 def read_params_from_file(file: Path):
     logger.info(f"Reading parameters from {file}")
     with h5py.File(file, "r") as f:
         params = dict(
-            alphaoh=jnp.array(f["energy"]["alphaoh"]),
-            beta=jnp.array(f["energy"]["beta"]),
-            coefficients=jnp.array(f["energy"]["coefficients"]),
-            deoh=jnp.array(f["energy"]["deoh"]),
-            energy_correction=jnp.array(f["energy"]["energy_correction"]),
-            phh1=jnp.array(f["energy"]["phh1"]),
-            phh2=jnp.array(f["energy"]["phh2"]),
+            alphaoh=get_pint_quantity_from_dataset(f["energy"]["alphaoh"]),
+            beta=get_pint_quantity_from_dataset(f["energy"]["beta"]),
+            coefficients=get_pint_quantity_from_dataset(f["energy"]["coefficients"]),
+            deoh=get_pint_quantity_from_dataset(f["energy"]["deoh"]),
+            energy_correction=get_pint_quantity_from_dataset(
+                f["energy"]["energy_correction"]
+            ),
+            phh1=get_pint_quantity_from_dataset(f["energy"]["phh1"]),
+            phh2=get_pint_quantity_from_dataset(f["energy"]["phh2"]),
         )
+
     return params
+
+
+def write_pint_quantity_to_dataset(dataset: h5py.Dataset, key: str, q: Quantity):
+    d = dataset.create_dataset(key, data=q.magnitude)
+    try:
+        d.attrs["units"] = str(q.units)
+    except BaseException() as e:
+        logger.warning(f"Could not log units for: {key}. \n {e}")
 
 
 def write_params_to_file(params, file, exponent_max, exponent_sum_max, r_e, theta_e):
     with h5py.File(file, "w") as f:
         energy = f.create_group("energy")
 
-        f.attrs["exponent_max"] = exponent_max
-        f.attrs["exponent_sum_max"] = exponent_sum_max
+        energy.attrs["exponent_max"] = exponent_max
+        energy.attrs["exponent_sum_max"] = exponent_sum_max
 
-        energy_correction = energy.create_dataset(
-            "energy_correction",
-            data=params["energy_correction"],
-        )
-        energy_correction.attrs["units"] = "eV"
+        for k, v in params.items():
+            write_pint_quantity_to_dataset(energy, k, v)
 
-        deoh = energy.create_dataset("deoh", data=params["deoh"])
-        deoh.attrs["units"] = "eV"
-
-        alphaoh = energy.create_dataset("alphaoh", data=params["alphaoh"])
-        alphaoh.attrs["units"] = "1/Angstrom"
-
-        phh1 = energy.create_dataset("phh1", data=params["phh1"])
-        phh1.attrs["units"] = "eV"
-
-        phh2 = energy.create_dataset("phh2", data=params["phh2"])
-        phh2.attrs["units"] = "1/Angstrom"
-
-        beta = energy.create_dataset("beta", data=params["beta"])
-        beta.attrs["units"] = "1/Angstrom^2"
-
-        r_e = energy.create_dataset("r_e", data=r_e)
-        r_e.attrs["units"] = "Angstrom"
-
-        theta_e = energy.create_dataset("theta_e", data=theta_e)
-        theta_e.attrs["units"] = "deg"
-
-        coefficients = energy.create_dataset(
-            name="coefficients", data=params["coefficients"]
-        )
-        coefficients.attrs["units"] = "eV"
-        coefficients.attrs["exponent_max"] = exponent_max
-        coefficients.attrs["exponent_sum_max"] = exponent_sum_max
-        coefficients.attrs["rank"] = 0
+        write_pint_quantity_to_dataset(energy, "r_e", r_e)
+        write_pint_quantity_to_dataset(energy, "theta_e", theta_e)
 
 
 def Va(r1, deoh, alphaoh):
@@ -193,25 +194,19 @@ def energy_monomer_base(
 
 energy_monomer = functools.partial(
     energy_monomer_base,
-    r_e=R_E,
-    theta_e=THETA_E,
+    r_e=R_E.magnitude,
+    theta_e=THETA_E.magnitude,
     exponent_sum_max=EXPONENT_SUM_MAX,
     exponent_max=EXPONENT_MAX,
     skip_zero=SKIP_ZERO,
-)
-
-n_coeffs = n_coefficients(
-    exponent_sum_max=EXPONENT_SUM_MAX, exponent_max=EXPONENT_MAX, skip_zero=SKIP_ZERO
 )
 
 
 with h5py.File(INPUT_FILE, "r") as f:
     geometries_test = jnp.array(f["energy"]["geometries"]["test"])
     geometries_train = jnp.array(f["energy"]["geometries"]["train"])
-
     energies_test = jnp.array(f["energy"]["test"]["target"])
     energies_train = jnp.array(f["energy"]["train"]["target"])
-
     energies_fit_anoop = jnp.array(f["energy"]["train"]["pred"])
 
 
@@ -262,20 +257,27 @@ if Path(INITIAL_PARAMS_FILE).exists():
 else:
     init_params = None
 
-logger.info(f"{len(init_params['coefficients']) = }")
-logger.info(f"{n_coeffs = }")
-
+n_coeffs = n_coefficients(
+    exponent_sum_max=EXPONENT_SUM_MAX, exponent_max=EXPONENT_MAX, skip_zero=SKIP_ZERO
+)
 if init_params is None or len(init_params["coefficients"]) != n_coeffs:
     logger.warning("Using random initialization for coefficients")
     init_params = {
-        "alphaoh": 2.6,
-        "beta": -0.2,
-        "deoh": 3.6,
-        "energy_correction": -50.0,
-        "phh1": 20.0,
-        "phh2": 3.0,
+        "alphaoh": 2.6 / ureg.angstrom,
+        "beta": -0.2 / ureg.angstrom**2,
+        "deoh": 3.6 * ureg.eV,
+        "energy_correction": -50.0 * ureg.eV,
+        "phh1": 20.0 * ureg.eV,
+        "phh2": 3.0 / ureg.angstrom,
     }
-    init_params["coefficients"] = np.random.uniform(size=(n_coeffs))
+
+    init_params["coefficients"] = np.random.uniform(size=(n_coeffs)) * ureg.eV
+
+logger.info("Initial parameters:")
+logger.info(init_params)
+
+logger.info(f"{len(init_params['coefficients']) = }")
+logger.info(f"{n_coeffs = }")
 
 # randomly select 20% of the geometries as test
 mask_test = np.random.uniform(size=(len(geometries_train))) <= FRACT_TEST
@@ -285,109 +287,110 @@ y_train = jnp.array(energies_train[~mask_test])
 x_test = jnp.array(geometries_train[mask_test])
 y_test = jnp.array(energies_train[mask_test])
 
-# compute the initial loss values before training
-initial_loss_train = combined_loss(init_params, x=x_train, y=y_train)
-initial_loss_test = combined_loss(init_params, x=x_test, y=y_test)
-logger.info(f"{initial_loss_train = }")
-logger.info(f"{initial_loss_test = }")
 
+def plot_training(x_train, params_jax, epochs, test_losses, train_losses):
+    y_pred_train = compute_y(x_train, params_jax)
+    max_diff = np.max(np.abs(y_pred_train - y_train))
+    avg_diff = np.mean(np.abs(y_pred_train - y_train))
 
-optimizer = optax.adamw(learning_rate=LR_SCHEDULE, weight_decay=1e-4)
+    logger.info(f"{max_diff = }")
+    logger.info(f"{avg_diff = }")
 
-opt_state = optimizer.init(init_params)
-
-
-# Create a JIT-compiled training step that computes gradients with respect to the `params` dictionary.
-@jax.jit
-def train_step(params, opt_state, x, y):
-    loss, grads = jax.value_and_grad(combined_loss)(params, x, y)
-    updates, opt_state = optimizer.update(grads, opt_state, params)
-    params = optax.apply_updates(params, updates)
-    return params, opt_state, loss
+    plt.plot(epochs, test_losses, label="loss (test)")
+    plt.plot(epochs, train_losses, label="loss (train)")
+    plt.yscale("log")
+    plt.legend()
+    plt.savefig(PLOT_DIR / "test_losses.png", dpi=300)
 
 
 # Training loop.
-train_losses = []
-test_losses = []
-epochs = []
+def train(
+    num_epochs, init_params, x_train, y_train, x_test, y_test, n_epoch_log=N_EPOCH_LOG
+):
+    params_jax = {k: v.magnitude for k, v in init_params.items()}
+    logger.info(f"{params_jax = }")
 
+    # compute the initial loss values before training
+    initial_loss_train = combined_loss(params_jax, x=x_train, y=y_train)
+    initial_loss_test = combined_loss(params_jax, x=x_test, y=y_test)
 
-logger.info("Initial parameters:")
-logger.info(init_params)
+    logger.info(f"{initial_loss_train = }")
+    logger.info(f"{initial_loss_test = }")
 
-params = init_params
-for epoch in range(NUM_EPOCHS):
-    # Use training data here (energies_train) for training.
-    params, opt_state, loss = train_step(params, opt_state, x_train, y_train)
-    if epoch % N_EPOCH_LOG == 0:
-        train_loss = combined_loss(params, x_train, y_train)
-        test_loss = combined_loss(params, x_test, y_test)
-        epochs.append(epoch)
-        test_losses.append(test_loss)
-        train_losses.append(loss)
+    optimizer = optax.adamw(learning_rate=LR_SCHEDULE, weight_decay=1e-4)
+    opt_state = optimizer.init(params_jax)
 
-        y_pred_train = compute_y(x_train, params)
-        mean_diff = np.mean(np.abs(y_train - y_pred_train))
-        max_diff = np.max(np.abs(y_train - y_pred_train))
+    # Create a JIT-compiled training step that computes gradients with respect to the `params` dictionary.
+    @jax.jit
+    def train_step(params, opt_state, x, y):
+        loss, grads = jax.value_and_grad(combined_loss)(params, x, y)
+        updates, opt_state = optimizer.update(grads, opt_state, params)
+        params = optax.apply_updates(params, updates)
+        return params, opt_state, loss
 
-        logger.info(
-            f"=========== EPOCH {epoch} ===========\n"
-            f"    Loss (train): {loss}\n"
-            f"    Loss (test): {test_loss}\n"
-            f"    mean_diff: {mean_diff}\n"
-            f"    max_diff: {max_diff}\n"
-            f"    lr: {LR_SCHEDULE(epoch):.1e}\n"
+    train_losses = []
+    test_losses = []
+    epochs = []
+
+    for epoch in range(num_epochs):
+        # Use training data here (energies_train) for training.
+        params_jax, opt_state, loss = train_step(
+            params_jax, opt_state, x_train, y_train
         )
+        if epoch % n_epoch_log == 0:
+            test_loss = combined_loss(params_jax, x_test, y_test)
+            epochs.append(epoch)
+            test_losses.append(test_loss)
+            train_losses.append(loss)
 
-logger.info("Trained parameters:")
-logger.info(params)
+            y_pred_train = compute_y(x_train, params_jax)
+            mean_diff = np.mean(np.abs(y_train - y_pred_train))
+            max_diff = np.max(np.abs(y_train - y_pred_train))
+
+            logger.info(
+                f"=========== EPOCH {epoch} ===========\n"
+                f"    Loss (train): {loss}\n"
+                f"    Loss (test): {test_loss}\n"
+                f"    mean_diff: {mean_diff}\n"
+                f"    max_diff: {max_diff}\n"
+                f"    lr: {LR_SCHEDULE(epoch):.1e}\n"
+            )
+
+    plot_training(
+        x_train=x_train,
+        params_jax=params_jax,
+        epochs=epochs,
+        test_losses=test_losses,
+        train_losses=train_losses,
+    )
+
+    logger.info("Trained parameters:")
+    logger.info(params_jax)
+
+    params_result = {}
+    for k, v in params_jax.items():
+        params_result[k] = v * init_params[k].units
+
+    logger.info("Result parameters (with units):")
+    logger.info(params_result)
+
+    return params_result
+
+
+params_result = train(
+    num_epochs=NUM_EPOCHS,
+    init_params=init_params,
+    x_train=x_train,
+    y_train=y_train,
+    x_test=x_test,
+    y_test=y_test,
+)
 
 write_params_to_file(
-    params,
+    params_result,
     OUTPUT_FILE,
     exponent_max=EXPONENT_MAX,
     exponent_sum_max=EXPONENT_SUM_MAX,
     r_e=R_E,
     theta_e=THETA_E,
 )
-
-
-y_pred_train = compute_y(x_train, params)
-
-max_diff = np.max(np.abs(y_pred_train - y_train))
-max_diff_anoop = np.max(np.abs(energies_fit_anoop[~mask_test] - y_train))
-avg_diff = np.mean(np.abs(y_pred_train - y_train))
-avg_diff_anoop = np.mean(np.abs(energies_fit_anoop[~mask_test] - y_train))
-
-logger.info(f"{max_diff = }")
-logger.info(f"{max_diff_anoop = }")
-logger.info(f"{avg_diff = }")
-logger.info(f"{avg_diff_anoop = }")
-
-
-plt.plot(epochs, test_losses, label="loss (test)")
-plt.plot(epochs, train_losses, label="loss (train)")
-plt.yscale("log")
-plt.legend()
-plt.savefig(PLOT_DIR / "test_losses.png", dpi=300)
-
-plt.close()
-
-plt.plot(y_pred_train, marker="o", ls="None", label="Target")
-plt.plot(y_train, marker=".", ls="None", label="Prediction")
-plt.plot(energies_fit_anoop[~mask_test], ls="None", marker="x", label="Anoops fit")
-
-plt.legend()
-plt.savefig(PLOT_DIR / "scatter.png", dpi=300)
-
-plt.close()
-plt.plot(y_train, np.abs(y_pred_train - y_train), ls="None", marker=".", label="sgd")
-plt.plot(
-    y_train,
-    np.abs(energies_fit_anoop[~mask_test] - y_train),
-    ls="None",
-    marker=".",
-    label="anoop",
-)
-plt.legend()
-plt.savefig(PLOT_DIR / "energy_vs_fit", dpi=300)
