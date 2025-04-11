@@ -22,6 +22,7 @@ FILE_PATH = Path(__file__).parent
 INPUT_FILE = FILE_PATH / "input/fitted_energies.hdf5"
 INITIAL_PARAMS_FILE = FILE_PATH / "input/params.hdf5"
 OUTPUT_FILE = FILE_PATH / "output/params.hdf5"
+OUTPUT_FILE_ATOMIC_UNITS = FILE_PATH / "output/params_atomic_units.hdf5"
 
 PLOT_DIR = Path("./plots")
 logger.info(f"{INPUT_FILE = }")
@@ -393,4 +394,29 @@ write_params_to_file(
     exponent_sum_max=EXPONENT_SUM_MAX,
     r_e=R_E,
     theta_e=THETA_E,
+)
+
+
+def convert_to_atomic_units(q: Quantity):
+    for u in [
+        ureg.hartree,
+        1.0 / ureg.hartree,
+        ureg.bohr,
+        1.0 / ureg.bohr,
+        1.0 / ureg.bohr**2,
+        ureg.rad,
+    ]:
+        if q.is_compatible_with(u):
+            return q.to(u)
+
+
+params_atomic_units = {k: convert_to_atomic_units(v) for k, v in params_result.items()}
+logger.info(f"{params_atomic_units = }")
+write_params_to_file(
+    params_atomic_units,
+    OUTPUT_FILE_ATOMIC_UNITS,
+    exponent_max=EXPONENT_MAX,
+    exponent_sum_max=EXPONENT_SUM_MAX,
+    r_e=convert_to_atomic_units(R_E),
+    theta_e=convert_to_atomic_units(THETA_E),
 )
