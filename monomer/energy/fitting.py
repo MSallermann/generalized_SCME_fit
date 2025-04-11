@@ -8,6 +8,7 @@ import h5py
 from pathlib import Path
 import logging
 from pint import UnitRegistry, Quantity
+from typing import Tuple, List
 
 ureg = UnitRegistry()
 logging.basicConfig(filename="fitting.log", level=logging.INFO)
@@ -43,8 +44,8 @@ logger.info(f"{EXPONENT_MAX = }")
 logger.info(f"{SKIP_ZERO = }")
 logger.info(f"{FRACT_TEST = }")
 
-NUM_EPOCHS = int(1e1)
-N_EPOCH_LOG = 5000
+NUM_EPOCHS = int(1e6)
+N_EPOCH_LOG = 10000
 INITIAL_LR = 1e-1
 TRANSITION_STEPS = 1000
 DECAY_RATE = 0.99
@@ -102,12 +103,50 @@ def write_pint_quantity_to_dataset(dataset: h5py.Dataset, key: str, q: Quantity)
         logger.warning(f"Could not log units for: {key}. \n {e}")
 
 
+def get_exponent_arrays(max_exponent: int, max_sum_exponent: int, skip_zero : bool) -> Tuple[List[int], List[int], List[int]]:
+    """
+    Generate lists of exponent indices for three variables (i, j, k) such that their sum 
+    does not exceed a given maximum.
+
+    Args:
+        max_exponent (int): The upper limit (exclusive) for each individual exponent.
+        max_sum_exponent (int): The maximum allowed sum of exponents (i + j + k).
+        skip_zero (bool): If `True`, skips the i=j=k=0 exponent
+
+
+    Returns:
+        Tuple[List[int], List[int], List[int]]: Three lists containing valid exponent indices for i, j, and k.
+    """
+    exponents_i: List[int] = []
+    exponents_j: List[int] = []
+    exponents_k: List[int] = []
+
+    for i in range(0, max_exponent):
+        for j in range(0, max_exponent):
+            for k in range(0, max_exponent):
+                if (i + j + k) <= max_sum_exponent:
+                    if i==0 and j==0 and k==0 and skip_zero:
+                        continue
+                    exponents_i.append(i)
+                    exponents_j.append(j)
+                    exponents_k.append(k)
+
+    return exponents_i, exponents_j, exponents_k
+
 def write_params_to_file(params, file, exponent_max, exponent_sum_max, r_e, theta_e):
     with h5py.File(file, "w") as f:
         energy = f.create_group("energy")
 
         energy.attrs["exponent_max"] = exponent_max
         energy.attrs["exponent_sum_max"] = exponent_sum_max
+
+        # Get the exponent arrays for i, j, and k
+        exponents_i, exponents_j, exponents_k = get_exponent_arrays(exponent_max, exponent_sum_max, skip_zero=SKIP_ZERO)
+
+        # Create one dataset per exponent array in the output group
+        energy.create_dataset(name="exponents_i", data=np.array(exponents_i))
+        energy.create_dataset(name="exponents_j", data=np.array(exponents_j))
+        energy.create_dataset(name="exponents_k", data=np.array(exponents_k))
 
         for k, v in params.items():
             write_pint_quantity_to_dataset(energy, k, v)
@@ -404,10 +443,13 @@ def convert_to_atomic_units(q: Quantity):
         ureg.bohr,
         1.0 / ureg.bohr,
         1.0 / ureg.bohr**2,
-        ureg.rad,
+        ureg.radian,
     ]:
         if q.is_compatible_with(u):
             return q.to(u)
+
+    logger.warn(f"Did not convert {q} to atomic units")
+    return q
 
 
 params_atomic_units = {k: convert_to_atomic_units(v) for k, v in params_result.items()}
