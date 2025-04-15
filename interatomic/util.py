@@ -1,7 +1,178 @@
 import pyscme
+from pyscme.parameters import parameter_H2O
+from pyscme.scme_calculator import SCMECalculator
+from pyscme.expansions import (
+    get_energy_expansion_from_hdf5_file,
+    get_moment_expansion_from_hdf5_file,
+)
+from pathlib import Path
+from ase import Atoms
+from ase.units import Bohr, Hartree
+import numpy as np
+from ase.constraints import FixBondLengths
+import logging
+from pydantic import BaseModel
 
-SCME_COMMIT = "274aa6fa4881bcb662d12a8c80488fa103a55fd2"
+# SCME_COMMIT = "274aa6fa4881bcb662d12a8c80488fa103a55fd2"
+# assert pyscme.version.commit() == SCME_COMMIT
+
+__FOLDER__ = Path(__file__).parent.resolve()
+
+DEFAULT_PARAMETERS = {
+    "te": 1.1045 / Bohr,
+    "td": 7.5548 * Bohr,
+    "Ar": 8149.63 / Hartree,
+    "Br": -0.5515,
+    "Cr": -3.4695 * Bohr,
+    "r_Br": 1.0 / Bohr,
+    "rc_Disp": 8.0 / Bohr,
+    "rc_Core": 7.5 / Bohr,
+    "rc_Elec": 9.0 / Bohr,
+    "C6": 46.4430e0,
+    "C8": 1141.7000e0,
+    "C10": 33441.0000e0,
+    "scf_policy": pyscme.SCFPolicy.strict,
+    "scf_convcrit": 1e-8,
+    "dms": False,
+    "qms": False,
+    "NC": [0, 0, 0],
+}
 
 
-def verify_version():
-    assert pyscme.version.commit() == SCME_COMMIT
+def get_rotation_matrix():
+    rand = np.random.random(size=(3, 3))
+    Q, R = np.linalg.qr(rand)
+    return Q
+
+
+def get_random_h2o_molecule(theta=1.821207441224783, roh=0.9519607159623009):
+    """Gives a water-molecule with random orientation and the oxygen at the origin"""
+
+    pos = np.zeros(shape=(3, 3))
+
+    # first row is the oxygen, so we leave it alone
+    # second row is the first hydrogen, we place it at (roh, 0, 0)
+    pos[1, :] = [roh, 0, 0]
+
+    # third row is the second hydrogen, we place it at (sin(theta)*roh, cos(theta)*roh, 0)
+    pos[2, :] = [np.cos(theta) * roh, np.sin(theta) * roh, 0]
+
+    # lastly we multiply with a random rotation matrix
+    pos = pos @ get_rotation_matrix()
+
+    # return the transposed positions
+    return pos
+
+
+def setup_monomer() -> Atoms:
+    h2o = get_random_h2o_molecule()
+    atoms = Atoms(symbols="OHH", positions=h2o, pbc=[False, False, False])
+    return atoms
+
+
+def setup_dimer(oo_distance: float) -> Atoms:
+    h2o_1 = get_random_h2o_molecule()
+    h2o_2 = get_random_h2o_molecule() + oo_distance
+
+    positions = np.vstack((h2o_1, h2o_2))
+    atoms = Atoms(symbols="OHHOHH", positions=positions, pbc=[False, False, False])
+
+    return atoms
+
+
+def constrain_dimer(atoms: Atoms):
+    atoms.set_constraint(FixBondLengths(pairs=[[0, 3]]))
+
+
+class SCMEParams(BaseModel):
+    te: float = 1.2 / Bohr
+    td: float = 7.5548 * Bohr
+    Ar: float = 8149.63 / Hartree
+    Br: float = -0.5515
+    Cr: float = -3.4695 * Bohr
+    r_Br: float = 1.0 / Bohr
+
+    rc_Disp: float = 8.0 / Bohr
+    rc_Core: float = 7.5 / Bohr
+    rc_Elec: float = 9.0 / Bohr
+
+    C6: float = 46.4430e0
+    C8: float = 1141.7000e0
+    C10: float = 33441.0000e0
+
+    w_rc_Elec: float = 2.0 / Bohr
+    w_rc_Core: float = 2.0 / Bohr
+    w_rc_Disp: float = 2.0 / Bohr
+
+    max_iter_scf: int = 100
+    scf_convcrit: float = 1e-8
+    dms: bool = True
+    qms: bool = True
+    NC: list[int] = [0, 0, 0]
+
+
+def setup_expansions(calc: SCMECalculator, parametrization_key: str):
+    file = __FOLDER__ / "resources/scme_expansions.hdf5"
+
+    logging.info("Setting up expansions")
+    logging.info(f"    {parametrization_key = }")
+    logging.info(f"    {file = }")
+
+    energy_expansion = get_energy_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset="energy"
+    )
+    dipole_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/dipole"
+    )
+    quadrupole_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/quadrupole"
+    )
+    octupole_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/octupole"
+    )
+    hexadecapole_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/hexadecapole"
+    )
+    dip_dip_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/dip_dip"
+    )
+    dip_quad_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/dip_quad"
+    )
+    quad_quad_expansion = get_moment_expansion_from_hdf5_file(
+        path_to_file=file, key_to_dataset=f"{parametrization_key}/quad_quad"
+    )
+
+    calc.scme.monomer_energy_expansion = energy_expansion
+    calc.scme.static_dipole_moment_expansion = dipole_expansion
+    calc.scme.static_quadrupole_moment_expansion = quadrupole_expansion
+    calc.scme.static_octupole_moment_expansion = octupole_expansion
+    calc.scme.static_hexadecapole_moment_expansion = hexadecapole_expansion
+    calc.scme.dip_dip_polarizability_expansion = dip_dip_expansion
+    calc.scme.dip_quad_polarizability_expansion = dip_quad_expansion
+    calc.scme.quad_quad_polarizability_expansion = quad_quad_expansion
+
+
+DEFAULT_PARAMS = SCMEParams()
+
+
+def setup_calculator(
+    atoms: Atoms,
+    scme_params: SCMEParams = DEFAULT_PARAMS,
+    parametrization_key: str = "component_PBE_fullrange_reflect_6_9",
+) -> SCMECalculator:
+    logging.info("=====================================")
+    logging.info("Setting up SCME calculator.")
+    logging.info(f"    {scme_params = }")
+    logging.info(f"Version report\n{pyscme.version.report()}")
+    logging.info("-------------------------------------")
+
+    atoms.calc = SCMECalculator(atoms, **dict(scme_params))
+    parameter_H2O.Assign_parameters_H20(atoms.calc.scme)
+
+    setup_expansions(
+        atoms.calc,
+        parametrization_key=parametrization_key,
+    )
+
+    return atoms.calc

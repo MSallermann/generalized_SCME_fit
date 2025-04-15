@@ -103,9 +103,11 @@ def write_pint_quantity_to_dataset(dataset: h5py.Dataset, key: str, q: Quantity)
         logger.warning(f"Could not log units for: {key}. \n {e}")
 
 
-def get_exponent_arrays(max_exponent: int, max_sum_exponent: int, skip_zero : bool) -> Tuple[List[int], List[int], List[int]]:
+def get_exponent_arrays(
+    max_exponent: int, max_sum_exponent: int, skip_zero: bool
+) -> Tuple[List[int], List[int], List[int]]:
     """
-    Generate lists of exponent indices for three variables (i, j, k) such that their sum 
+    Generate lists of exponent indices for three variables (i, j, k) such that their sum
     does not exceed a given maximum.
 
     Args:
@@ -125,13 +127,14 @@ def get_exponent_arrays(max_exponent: int, max_sum_exponent: int, skip_zero : bo
         for j in range(0, max_exponent):
             for k in range(0, max_exponent):
                 if (i + j + k) <= max_sum_exponent:
-                    if i==0 and j==0 and k==0 and skip_zero:
+                    if i == 0 and j == 0 and k == 0 and skip_zero:
                         continue
                     exponents_i.append(i)
                     exponents_j.append(j)
                     exponents_k.append(k)
 
     return exponents_i, exponents_j, exponents_k
+
 
 def write_params_to_file(params, file, exponent_max, exponent_sum_max, r_e, theta_e):
     with h5py.File(file, "w") as f:
@@ -141,7 +144,9 @@ def write_params_to_file(params, file, exponent_max, exponent_sum_max, r_e, thet
         energy.attrs["exponent_sum_max"] = exponent_sum_max
 
         # Get the exponent arrays for i, j, and k
-        exponents_i, exponents_j, exponents_k = get_exponent_arrays(exponent_max, exponent_sum_max, skip_zero=SKIP_ZERO)
+        exponents_i, exponents_j, exponents_k = get_exponent_arrays(
+            exponent_max, exponent_sum_max, skip_zero=SKIP_ZERO
+        )
 
         # Create one dataset per exponent array in the output group
         energy.create_dataset(name="exponents_i", data=np.array(exponents_i))

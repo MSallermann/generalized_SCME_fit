@@ -1,0 +1,46 @@
+INCAR created by Atomic Simulation Environment
+ ENCUT    = 600.000000
+ GGA      = BF
+ LUSE_VDW = .TRUE.
+ Zab_VDW  = -1.8867
+ LBEEFENS = .TRUE.
+
+# Optimization parameters
+ EDIFF   = 1.00E-06
+ EDIFFG  = -0.01
+# AGLO = Fast
+ PREC = Accurate
+
+
+# Single-Point calculation
+# IBRION = -1
+
+# VTST force based Conjugate gradient optimization
+ IBRION  = 3
+ POTIM   = 0
+ IOPT    = 2
+ MAXMOVE = 0.2
+ FDSTEP  = 5E-3
+ NSW     = 200
+
+# Frequency Calculations
+# IBRION = 5
+# POTIM  = 0.02
+# NSW    = 1
+
+# Spin-polarized
+# ISPIN   = 2
+# ISMEAR  = 1
+# SIGMA   = 0.1
+ ISYM    = 0
+# NUPDOWN = 6
+# MAGMOM  = 63*0.0 1*6.0 2*0.0
+ 
+ ISTART = 1
+# IDIPOL = 4
+# LASPH  = .TRUE.
+# LORBIT = 11
+# LREAL  = AUTO
+# Uncheck to get the Bader charges
+# LAECHG=.TRUE.
+# LCHARG=.TRUE.
