@@ -46,7 +46,7 @@ logger.info(f"{EXPONENT_MAX = }")
 logger.info(f"{SKIP_ZERO = }")
 logger.info(f"{FRACT_TEST = }")
 
-NUM_EPOCHS = int(2e4)
+NUM_EPOCHS = int(1e6)
 N_EPOCH_LOG = 10000
 INITIAL_LR = 1e-1
 TRANSITION_STEPS = 1000
@@ -68,14 +68,6 @@ logger.info(f"{TRANSITION_STEPS = }")
 # ===============================================
 #                 End: SETUP
 # ===============================================
-
-
-energy_monomer = functools.partial(
-    energy_monomer_base,
-    exponent_sum_max=EXPONENT_SUM_MAX,
-    exponent_max=EXPONENT_MAX,
-    skip_zero=SKIP_ZERO,
-)
 
 
 with h5py.File(INPUT_FILE, "r") as f:
@@ -178,7 +170,14 @@ def plot_training(x_train, params_jax, epochs, test_losses, train_losses):
 
 # Training loop.
 def train(
-    num_epochs, init_params, x_train, y_train, x_test, y_test, n_epoch_log=N_EPOCH_LOG
+    energy_function,
+    num_epochs,
+    init_params,
+    x_train,
+    y_train,
+    x_test,
+    y_test,
+    n_epoch_log=N_EPOCH_LOG,
 ):
     params_jax = {k: v.magnitude for k, v in init_params.items()}
     logger.info(f"{params_jax = }")
@@ -250,7 +249,23 @@ def train(
     return params_result
 
 
+# Removed r_e and theta_e from the initial parameters,
+# because they should not be changed by the optimization
+R_E = init_params.pop("r_e").to(ureg.angstrom)
+THETA_E = init_params.pop("theta_e").to(ureg.radian)
+
+energy_monomer = functools.partial(
+    energy_monomer_base,
+    exponent_sum_max=EXPONENT_SUM_MAX,
+    exponent_max=EXPONENT_MAX,
+    skip_zero=SKIP_ZERO,
+    r_e=R_E.magnitude,  # We create a partial function where r_e and theta_e are fixed
+    theta_e=THETA_E.magnitude,  # We create a partial function where r_e and theta_e are fixed
+)
+
+# All the other parameters are free game to be adjusted
 params_result = train(
+    energy_monomer,
     num_epochs=NUM_EPOCHS,
     init_params=init_params,
     x_train=x_train,
@@ -258,6 +273,10 @@ params_result = train(
     x_test=x_test,
     y_test=y_test,
 )
+
+# Put r_e and theta_e back in the dictionary before writing the results
+params_result["r_e"] = R_E
+params_result["theta_e"] = THETA_E
 
 write_params_to_file(
     params_result,
