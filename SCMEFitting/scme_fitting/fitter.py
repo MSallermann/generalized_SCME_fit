@@ -78,6 +78,54 @@ class Fitter:
 
         return result
 
+    def fit_nevergrad(self, initial_parameters: Dict, budget: int, **kwargs) -> Dict:
+        """
+        Optimize parameters using Nevergrad`s NgIohTuned function.
+
+        Parameters
+        ----------
+        initial_parameters : Dict[str, float]
+            Initial guess for each parameter, as a mapping from name to value.
+        budget : int
+            The budget (number of function evaluations)
+        **kwargs
+            Additional keyword arguments passed directly to ` ng.optimizers.NgIohTuned.minimize`.
+
+        Returns
+        -------
+        Dict[str, float]
+            Dictionary of optimized parameter values.
+
+        Example
+        -------
+        >>> def objective_function_cb(idx: int, params: dict):
+        ...     if idx == 0:
+        ...         return 2.0 * (params["x"] - 2) ** 2
+        ...     if idx == 1:
+        ...         return 3.0 * (params["y"] + 1) ** 2
+        >>> fitter = Fitter(objective_function_cb=objective_function_cb, n_contributions=2)
+        >>> initial_params = dict(x=0.0, y=0.0)
+        >>> optimal_params = fitter.fit_nevergrad(initial_parameters=initial_params, budget=100)
+        >>> print(optimal_params)
+        {'x': 2.0, 'y': -1.0}
+        """
+
+        import nevergrad as ng
+
+        ng_params = ng.p.Dict(
+            **{k: ng.p.Scalar(v) for k, v in initial_parameters.items()}
+        )
+
+        instru = ng.p.Instrumentation(ng_params)
+
+        optimizer = ng.optimizers.NgIohTuned(parametrization=instru, budget=budget)
+
+        recommendation = optimizer.minimize(self.compute_total, **kwargs)  # best value
+        args, kwargs = recommendation.value
+
+        # Our optimal params are the first positional argument
+        return args[0]
+
     def fit_scipy(self, initial_parameters: Dict[str, float], **kwargs) -> Dict:
         """
         Optimize parameters using SciPy's minimize function.

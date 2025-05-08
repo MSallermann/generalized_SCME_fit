@@ -21,6 +21,9 @@ def test_with_square_func():
     assert np.isclose(optimal_params["x"], 2.0)
     assert np.isclose(optimal_params["y"], -1.0)
 
+    optimal_params = fitter.fit_nevergrad(initial_parameters=initial_params)
+    print(optimal_params)
+
 
 if __name__ == "__main__":
     test_with_square_func()

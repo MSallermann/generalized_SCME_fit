@@ -59,6 +59,8 @@ def test_scme_fitting():
         initial_parameters=initial_params, tol=0, options=dict(maxiter=50, disp=True)
     )
 
+    optimal_params = fitter.fit_nevergrad(initial_parameters=initial_params, budget=100)
+
     print(f"{initial_params = }")
     print(f"{optimal_params = }")
 
