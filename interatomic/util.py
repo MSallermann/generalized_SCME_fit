@@ -12,6 +12,7 @@ import numpy as np
 from ase.constraints import FixBondLengths
 import logging
 from pydantic import BaseModel
+from typing import Optional
 
 # SCME_COMMIT = "274aa6fa4881bcb662d12a8c80488fa103a55fd2"
 # assert pyscme.version.commit() == SCME_COMMIT
@@ -80,6 +81,19 @@ def setup_dimer(oo_distance: float) -> Atoms:
     return atoms
 
 
+def move_dimer_apart(atoms: Atoms, target_oo_distance: float):
+    assert len(atoms) == 6
+
+    oo_vector = atoms.get_distance(0, 3, vector=True, mic=False)
+    current_oo_distance = np.linalg.norm(oo_vector)
+
+    move_by = (
+        (target_oo_distance - current_oo_distance) * oo_vector / current_oo_distance
+    )
+
+    atoms.positions[3:] += move_by
+
+
 def constrain_dimer(atoms: Atoms):
     atoms.set_constraint(FixBondLengths(pairs=[[0, 3]]))
 
@@ -106,8 +120,8 @@ class SCMEParams(BaseModel):
 
     max_iter_scf: int = 100
     scf_convcrit: float = 1e-8
-    dms: bool = True
-    qms: bool = True
+    dms: bool = False
+    qms: bool = False
     NC: list[int] = [0, 0, 0]
 
 
@@ -159,20 +173,16 @@ DEFAULT_PARAMS = SCMEParams()
 def setup_calculator(
     atoms: Atoms,
     scme_params: SCMEParams = DEFAULT_PARAMS,
-    parametrization_key: str = "component_PBE_fullrange_reflect_6_9",
+    parametrization_key: Optional[str] = "component_PBE_fullrange_reflect_6_9",
 ) -> SCMECalculator:
-    logging.info("=====================================")
-    logging.info("Setting up SCME calculator.")
-    logging.info(f"    {scme_params = }")
-    logging.info(f"Version report\n{pyscme.version.report()}")
-    logging.info("-------------------------------------")
 
     atoms.calc = SCMECalculator(atoms, **dict(scme_params))
     parameter_H2O.Assign_parameters_H20(atoms.calc.scme)
 
-    setup_expansions(
-        atoms.calc,
-        parametrization_key=parametrization_key,
-    )
+    if parametrization_key is not None:
+        setup_expansions(
+            atoms.calc,
+            parametrization_key=parametrization_key,
+        )
 
     return atoms.calc

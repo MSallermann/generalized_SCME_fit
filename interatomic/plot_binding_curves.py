@@ -3,11 +3,10 @@ from pathlib import Path
 from typing import Optional
 import numpy as np
 import numpy.typing as npt
-from dataclasses import dataclass
+from pydantic import BaseModel
 
 
-@dataclass
-class PlotInfo:
+class PlotInfo(BaseModel):
     data: npt.ArrayLike
     name: Optional[str] = None
 
