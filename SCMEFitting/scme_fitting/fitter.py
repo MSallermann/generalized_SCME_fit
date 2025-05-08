@@ -1,17 +1,26 @@
 import logging
 from typing import Callable
 import numpy as np
-
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class Fitter:
     def __init__(
-        self, objective_function_cb: Callable[[int, dict], float], n_contributions: int
+        self,
+        objective_function_cb: Callable[[int, dict], float],
+        n_contributions: int,
+        weights: Optional[list[float]] = None,
     ):
         self.objective_function_cb = objective_function_cb
         self.n_contributions = n_contributions
+
+        if weights is None:
+            self.weights = np.ones(n_contributions)
+        else:
+            self.weights = np.array(weights)
+            assert len(weights) == n_contributions
 
     def compute_total_objective_function(self, parameters: dict) -> float:
         result = 0.0
@@ -19,9 +28,9 @@ class Fitter:
         for idx_cont in range(self.n_contributions):
             p = parameters.copy()
             current_contribution = self.objective_function_cb(idx_cont, p)
-            result += current_contribution
+            result += current_contribution * self.weights[idx_cont]
             logger.debug(
-                f"... Computing contribution {idx_cont} = {current_contribution}"
+                f"... Computing contribution {idx_cont} = {current_contribution} (weight = {self.weights[idx_cont]})"
             )
 
         logger.debug(f"Current params = {parameters}")
@@ -33,7 +42,9 @@ class Fitter:
         from scipy.optimize import minimize
 
         logger.info(f"Start fitting with initial parameters {initial_parameters}")
-        logger.info(f"Initial objective function {self.compute_total_objective_function(initial_parameters)}")
+        logger.info(
+            f"Initial objective function {self.compute_total_objective_function(initial_parameters)}"
+        )
 
         # Scipy expects a function with n real-valued parameters f( x )
         # but our objective function takes a dictionary of parameters
@@ -59,8 +70,9 @@ class Fitter:
         x = result.x
         opt_params = list_to_dict(x, initial_parameters.keys())
 
-
-        logger.info(f"Final objective function {self.compute_total_objective_function(opt_params)}")
+        logger.info(
+            f"Final objective function {self.compute_total_objective_function(opt_params)}"
+        )
         logger.info(f"Optimized_parameters {opt_params}")
 
         return opt_params

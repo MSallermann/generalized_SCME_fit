@@ -1,5 +1,5 @@
 from .scme_setup import setup_calculator, SCMEParams
-from ase import Atoms, Atom
+from ase import Atoms
 from ase.io import read, write
 from ase.geometry import find_mic
 from pathlib import Path
@@ -22,8 +22,9 @@ class SCMEObjectiveFunction:
         self.parametrization_key = parametrization_key
         self.adjustable_params = adjustable_params
 
+        n_contribs = len(reference_energies)
         # Make sure that we have a reference energy for each configuration
-        assert len(paths_to_reference_configuration) == len(reference_energies)
+        assert len(paths_to_reference_configuration) == n_contribs
 
         self.paths_to_reference_configuration = paths_to_reference_configuration
         self.reference_energies = reference_energies
@@ -64,7 +65,7 @@ class SCMEObjectiveFunction:
             new_atoms.append(H_sorted[1])
 
         result = atoms.copy()
-        result.set_constraint() # Make sure to explicitly delete any constraints
+        result.set_constraint()  # Make sure to explicitly delete any constraints, because they might trip us up while re-ordering the atoms
         result.set_atomic_numbers([a.number for a in new_atoms])
         result.set_positions([a.position for a in new_atoms])
 
@@ -92,9 +93,12 @@ class SCMEObjectiveFunction:
             OH_dist2 = atoms.get_distance(idxO, idxH2, mic=True)
 
             if OH_dist1 > OH_distance_tol or OH_dist2 > OH_distance_tol:
-                raise Exception(f"OH_distance too big for idx {idxO} ({OH_dist1}, {OH_dist2})")
+                raise Exception(
+                    f"OH_distance too big for idx {idxO} ({OH_dist1}, {OH_dist2})"
+                )
 
     def dump_test_configurations(self, path_to_folder: Path):
+        """Dumps the reference configurations and energies to a folder"""
         path_to_folder = Path(path_to_folder)
 
         path_to_folder.mkdir(exist_ok=True, parents=True)
@@ -105,9 +109,9 @@ class SCMEObjectiveFunction:
         np.savetxt(path_to_folder / "energies.txt", self.reference_energies)
 
     def create_atoms_object_from_configuration(self, path_to_configuration: Path):
-        logger.debug(
-            f"creating atoms object from path {path_to_configuration}"
-        )
+        """Reads in a file with ASE and creates the atoms object for the SCME"""
+
+        logger.debug(f"creating atoms object from path {path_to_configuration}")
 
         atoms = read(path_to_configuration)
         atoms = self.arange_water_in_OHH_order(atoms)
@@ -122,17 +126,17 @@ class SCMEObjectiveFunction:
         return atoms
 
     def create_list_of_atom_objects(self):
+        """Creates the list of atoms objects, which is internally used by the fitting"""
         atoms_list = []
         for p in self.paths_to_reference_configuration:
             atoms_list.append(self.create_atoms_object_from_configuration(p))
         return atoms_list
 
-    def __call__(self, idx: int, parameters: dict):
+    def get_energy(self, idx: int, parameters: dict):
+        """Computes the energy for a given set of parameters and a reference configuration"""
         self.assure_params(parameters)
 
         atoms = self.atoms_list[idx]
-        n_atoms = len(atoms)
-        target_energy = self.reference_energies[idx]
 
         ## Update the params of the calculator
         for k, v in parameters.items():
@@ -156,7 +160,14 @@ class SCMEObjectiveFunction:
         logger.debug(f"  {atoms.calc.energy_core = }")
         logger.debug(f"  {atoms.calc.energy_monomer = }")
 
-        objective_function_contribution = (energy - target_energy) ** 2 / n_atoms
+        return energy
+
+    def __call__(self, idx: int, parameters: dict):
+        """Implements the objective function"""
+        energy = self.get_energy(idx, parameters)
+
+        target_energy = self.reference_energies[idx]
+        objective_function_contribution = (energy - target_energy) ** 2
 
         logger.debug(f"Objective function value = {objective_function_contribution}")
 
