@@ -13,9 +13,7 @@ def test_with_square_func():
             return 3.0 * (params["y"] + 1) ** 2
 
     fitter = Fitter(objective_function_cb=objective_function_cb, n_contributions=2)
-
     initial_params = dict(x=0.0, y=0.0)
-
     optimal_params = fitter.fit_scipy(initial_parameters=initial_params)
 
     print(f"{optimal_params = }")

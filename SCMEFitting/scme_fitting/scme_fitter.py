@@ -6,6 +6,8 @@ from pathlib import Path
 import logging
 import numpy as np
 
+from typing import List, Dict
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,87 +20,162 @@ class SCMEObjectiveFunction:
         paths_to_reference_configuration: list[Path],
         reference_energies: list[float],
     ):
-        self.default_scme_params = default_scme_params
-        self.parametrization_key = parametrization_key
-        self.adjustable_params = adjustable_params
+        """
+        Functor for computing squared-error energy contributions using SCME.
 
-        n_contribs = len(reference_energies)
-        # Make sure that we have a reference energy for each configuration
-        assert len(paths_to_reference_configuration) == n_contribs
+        This class:
+        1. Loads reference configurations from file paths.
+        2. Reorders water molecules into OHH order as required by SCME.
+        3. Attaches an ASE SCME calculator with default parameters.
+        4. Computes per-configuration energy and returns (energy - reference)^2.
 
-        self.paths_to_reference_configuration = paths_to_reference_configuration
-        self.reference_energies = reference_energies
+        Parameters
+        ----------
+        default_scme_params : SCMEParams
+            Default SCME parameter object to copy for each configuration.
+        parametrization_key : str
+            Key selecting the parametrization for the moment and monomer energy expansion.
+        adjustable_params : Sequence[str]
+            Names of SCME parameters that will be adjusted during fitting.
+        paths_to_reference_configuration : Sequence[Path]
+            File paths for each reference configuration (xyz files).
+        reference_energies : Sequence[float]
+            Target energies corresponding to each reference configuration.
 
-        self.atoms_list = self.create_list_of_atom_objects()
+        Raises
+        ------
+        ValueError
+            If lengths of `paths_to_reference_configuration` and
+            `reference_energies` do not match.
+        """
 
-    def assure_params(self, parameters: dict):
-        """Make sure that all the necessary keys are in our parameter dict"""
-        for k in self.adjustable_params:
-            if k not in parameters:
-                raise Exception(f"Could not find key {k} in `parameters`")
+        if len(paths_to_reference_configuration) != len(reference_energies):
+            raise ValueError(
+                f"Mismatch: {len(paths_to_reference_configuration)} paths vs. "
+                f"{len(reference_energies)} energies"
+            )
 
-    def arange_water_in_OHH_order(self, atoms: Atoms):
-        """Takes an atoms object and re-arranges it in the OHH order that the SCME expects"""
+        self.default_scme_params: SCMEParams = default_scme_params
+        self.parametrization_key: str = parametrization_key
+        self.adjustable_params: List[str] = list(adjustable_params)
+        self.paths_to_reference_configuration: List[Path] = list(
+            paths_to_reference_configuration
+        )
+        self.reference_energies: List[float] = list(reference_energies)
+
+        self.atoms_list: List[Atoms] = self._create_list_of_atom_objects()
+
+    def assure_params(self, parameters: Dict[str, float]) -> None:
+        """
+        Ensure all adjustable parameters are present in the input dict.
+
+        Parameters
+        ----------
+        parameters : Dict[str, float]
+            Parameter values to check.
+
+        Raises
+        ------
+        KeyError
+            If any adjustable parameter is missing.
+        """
+        for key in self.adjustable_params:
+            if key not in parameters:
+                raise KeyError(f"Missing parameter '{key}' in input dict")
+
+    def arange_water_in_OHH_order(self, atoms: Atoms) -> Atoms:
+        """
+        Reorder atoms so each water molecule appears as O, H, H.
+
+        Parameters
+        ----------
+        atoms : Atoms
+            Original Atoms object containing water molecules.
+
+        Returns
+        -------
+        Atoms
+            New Atoms object with OHH ordering and no constraints.
+
+        Raises
+        ------
+        ValueError
+            If atom counts or ratios are inconsistent with water.
+        """
         n_atoms = len(atoms)
+        if n_atoms % 3 != 0:
+            raise ValueError(f"Number of atoms {n_atoms} is not a multiple of 3")
 
-        # Some asserts
-        assert n_atoms % 3 == 0
         mask_O = atoms.numbers == 8
         mask_H = atoms.numbers == 1
-        assert 2 * sum(mask_O) == sum(mask_H)
+        if 2 * mask_O.sum() != mask_H.sum():
+            raise ValueError("Mismatch between O and H counts for water molecules")
 
-        # Now we create a list of new positions
-        new_atoms = []
+        new_order: List[Atoms] = []
         for atom_O in atoms[mask_O]:
-            assert atom_O.number == 8
-            new_atoms.append(atom_O)
-
-            # sort the hydrogens by ascending distance from the current oxygen
+            new_order.append(atom_O)
             H_sorted = sorted(
                 atoms[mask_H],
                 key=lambda a: find_mic(atom_O.position - a.position, cell=atoms.cell)[
                     1
                 ],
             )
-
-            new_atoms.append(H_sorted[0])
-            new_atoms.append(H_sorted[1])
+            new_order.extend(H_sorted[:2])
 
         result = atoms.copy()
-        result.set_constraint()  # Make sure to explicitly delete any constraints, because they might trip us up while re-ordering the atoms
-        result.set_atomic_numbers([a.number for a in new_atoms])
-        result.set_positions([a.position for a in new_atoms])
-
+        result.set_constraint()
+        result.set_atomic_numbers([a.number for a in new_order])
+        result.set_positions([a.position for a in new_order])
         return result
 
-    def check_water_is_in_OHH_order(self, atoms: Atoms, OH_distance_tol: float = 2.0):
-        """Asserts that an atoms object contains water in the OHH order"""
+    def check_water_is_in_OHH_order(
+        self, atoms: Atoms, OH_distance_tol: float = 2.0
+    ) -> None:
+        """
+        Validate that each water molecule is ordered O, H, H and within tolerance.
 
+        Parameters
+        ----------
+        atoms : Atoms
+            Atoms object to validate.
+        OH_distance_tol : float, optional
+            Maximum allowed O-H distance (default is 2.0 Å).
+
+        Raises
+        ------
+        ValueError
+            If ordering or distances violate water OHH assumptions.
+        """
         n_atoms = len(atoms)
+        if n_atoms % 3 != 0:
+            raise ValueError("Total atoms not divisible by 3 for water molecules")
 
-        assert n_atoms % 3 == 0
-
-        n_water = n_atoms // 3
-
-        for iwater in range(n_water):
-            idxO = 3 * iwater
-            idxH1 = idxO + 1
-            idxH2 = idxO + 2
-
-            assert atoms.numbers[idxO] == 8
-            assert atoms.numbers[idxH1] == 1
-            assert atoms.numbers[idxH2] == 1
-
-            OH_dist1 = atoms.get_distance(idxO, idxH1, mic=True)
-            OH_dist2 = atoms.get_distance(idxO, idxH2, mic=True)
-
-            if OH_dist1 > OH_distance_tol or OH_dist2 > OH_distance_tol:
-                raise Exception(
-                    f"OH_distance too big for idx {idxO} ({OH_dist1}, {OH_dist2})"
+        for i in range(n_atoms // 3):
+            idxO, idxH1, idxH2 = 3 * i, 3 * i + 1, 3 * i + 2
+            if (
+                atoms.numbers[idxO] != 8
+                or atoms.numbers[idxH1] != 1
+                or atoms.numbers[idxH2] != 1
+            ):
+                raise ValueError(
+                    f"Atom types not OHH at indices {idxO},{idxH1},{idxH2}"
+                )
+            d1 = atoms.get_distance(idxO, idxH1, mic=True)
+            d2 = atoms.get_distance(idxO, idxH2, mic=True)
+            if d1 > OH_distance_tol or d2 > OH_distance_tol:
+                raise ValueError(
+                    f"O-H distances {(d1, d2)} exceed tolerance {OH_distance_tol}"
                 )
 
     def dump_test_configurations(self, path_to_folder: Path):
-        """Dumps the reference configurations and energies to a folder"""
+        """
+        Write reference configurations and energies to disk for inspection.
+
+        Parameters
+        ----------
+        path_to_folder : Path
+            Directory where to save `atoms_i.xyz` and `energies.txt`.
+        """
         path_to_folder = Path(path_to_folder)
 
         path_to_folder.mkdir(exist_ok=True, parents=True)
@@ -108,62 +185,102 @@ class SCMEObjectiveFunction:
 
         np.savetxt(path_to_folder / "energies.txt", self.reference_energies)
 
-    def create_atoms_object_from_configuration(self, path_to_configuration: Path):
-        """Reads in a file with ASE and creates the atoms object for the SCME"""
+    def create_atoms_object_from_configuration(
+        self, path_to_configuration: Path
+    ) -> Atoms:
+        """
+        Load atoms from a configuration file, reorder them to conform to OHH order
+        and attach the SCME calculator.
 
-        logger.debug(f"creating atoms object from path {path_to_configuration}")
+        Parameters
+        ----------
+        path_to_configuration : Path
+            File path to an ASE-readable structure (e.g. .xyz).
 
+        Returns
+        -------
+        Atoms
+            Atoms object with SCME calculator attached and ready for energy eval.
+        """
+        logger.debug(f"Loading configuration from {path_to_configuration}")
         atoms = read(path_to_configuration)
         atoms = self.arange_water_in_OHH_order(atoms)
         self.check_water_is_in_OHH_order(atoms)
-
         scme_params = self.default_scme_params.copy()
-
         setup_calculator(
-            atoms, scme_params=scme_params, parametrization_key=self.parametrization_key
+            atoms,
+            scme_params=scme_params,
+            parametrization_key=self.parametrization_key,
         )
-
         return atoms
 
-    def create_list_of_atom_objects(self):
-        """Creates the list of atoms objects, which is internally used by the fitting"""
-        atoms_list = []
-        for p in self.paths_to_reference_configuration:
-            atoms_list.append(self.create_atoms_object_from_configuration(p))
-        return atoms_list
+    def _create_list_of_atom_objects(self) -> List[Atoms]:
+        """
+        Internal: Build Atoms objects for all reference configurations.
 
-    def get_energy(self, idx: int, parameters: dict):
-        """Computes the energy for a given set of parameters and a reference configuration"""
+        Returns
+        -------
+        List[Atoms]
+            Prepared Atoms objects for each reference path.
+        """
+        return [
+            self.create_atoms_object_from_configuration(p)
+            for p in self.paths_to_reference_configuration
+        ]
+
+    def get_energy(self, idx: int, parameters: Dict[str, float]) -> float:
+        """
+        Compute SCME energy for configuration `idx` with `parameters` applied.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the reference configuration.
+        parameters : Dict[str, float]
+            SCME parameter values to set before evaluation.
+
+        Returns
+        -------
+        float
+            Potential energy from the ASE Atoms object.
+
+        Raises
+        ------
+        KeyError
+            If required parameters are missing.
+        """
         self.assure_params(parameters)
-
         atoms = self.atoms_list[idx]
-
-        ## Update the params of the calculator
-        for k, v in parameters.items():
-            logger.debug(f"Updating {k}")
-            logger.debug(f"  Prev value = {getattr(atoms.calc.scme, k)}")
-            logger.debug(f"  New value = {v}")
-            atoms.calc.scme.__setattr__(k, v)
+        for key, value in parameters.items():
+            setattr(atoms.calc.scme, key, value)
 
         # We have to make sure to trigger the update of the energy manually,
         # because ase will think it can use the cached energy values,
-        # since none of the coordinates has changed
+        # since none of the coordinates has changed.
+        # Therefore, we explicitly call the `calculate` function
+
         atoms.calc.calculate(atoms)
-
-        # Retrieve the potential energy
         energy = atoms.get_potential_energy()
-
-        logger.debug(f"Calculated energy: {energy}")
-
-        logger.debug(f"  {atoms.calc.energy_electrostatic = }")
-        logger.debug(f"  {atoms.calc.energy_dispersion = }")
-        logger.debug(f"  {atoms.calc.energy_core = }")
-        logger.debug(f"  {atoms.calc.energy_monomer = }")
-
+        logger.debug(f"Calculated energy for idx {idx}: {energy}")
         return energy
 
     def __call__(self, idx: int, parameters: dict):
-        """Implements the objective function"""
+        """
+        Compute squared-error contribution for configuration `idx`.
+
+        Parameters
+        ----------
+        idx : int
+            Index of the reference configuration.
+        parameters : Dict[str, float]
+            SCME parameter values to apply.
+
+        Returns
+        -------
+        float
+            Squared difference between computed and reference energy.
+        """
+
         energy = self.get_energy(idx, parameters)
 
         target_energy = self.reference_energies[idx]
