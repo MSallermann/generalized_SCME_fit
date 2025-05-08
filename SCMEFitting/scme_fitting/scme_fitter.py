@@ -20,12 +20,13 @@ class SCMEObjectiveFunction:
         self.parametrization_key = parametrization_key
         self.adjustable_params = adjustable_params
 
+        # Make sure that we have a reference energy for each configuration
         assert len(paths_to_reference_configuration) == len(reference_energies)
+
         self.paths_to_reference_configuration = paths_to_reference_configuration
         self.reference_energies = reference_energies
 
-        self.atoms_list = []
-        self.create_list_of_atom_objects()
+        self.atoms_list = self.create_list_of_atom_objects()
 
     def assure_params(self, parameters: dict):
         for k in self.adjustable_params:
@@ -47,8 +48,10 @@ class SCMEObjectiveFunction:
         )
 
     def create_list_of_atom_objects(self):
+        atoms_list = []
         for p in self.paths_to_reference_configuration:
-            self.atoms_list.append(self.create_atoms_object_from_configuration(p))
+            atoms_list.append(self.create_atoms_object_from_configuration(p))
+        return atoms_list
 
     def __call__(self, idx: int, parameters: dict):
         self.assure_params(parameters)
