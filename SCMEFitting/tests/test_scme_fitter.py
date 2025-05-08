@@ -21,7 +21,9 @@ def test_scme_fitting():
         "/home/moritz/SCME/generalized_SCME_interatomic_fit/SCMEFitting/scme_fitting/resources/PBE"
     )
 
-    paths_to_reference_configurations, reference_energies = create_scme_fit_data(base_path)
+    paths_to_reference_configurations, reference_energies = create_scme_fit_data(
+        base_path
+    )
 
     parametrization_key = "component_PBE_fullrange_reflect_4_5"
     parametrization_key = "component_PBE_fullrange_reflect_6_9"

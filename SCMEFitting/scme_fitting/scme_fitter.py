@@ -1,5 +1,5 @@
 from .scme_setup import setup_calculator, SCMEParams
-from ase import Atoms
+from ase import Atoms, Atom
 from ase.io import read, write
 from ase.geometry import find_mic
 from pathlib import Path
@@ -40,15 +40,14 @@ class SCMEObjectiveFunction:
         """Takes an atoms object and re-arranges it in the OHH order that the SCME expects"""
         n_atoms = len(atoms)
 
+        # Some asserts
         assert n_atoms % 3 == 0
         mask_O = atoms.numbers == 8
-
         mask_H = atoms.numbers == 1
-
         assert 2 * sum(mask_O) == sum(mask_H)
 
+        # Now we create a list of new positions
         new_atoms = []
-
         for atom_O in atoms[mask_O]:
             assert atom_O.number == 8
             new_atoms.append(atom_O)
@@ -65,14 +64,13 @@ class SCMEObjectiveFunction:
             new_atoms.append(H_sorted[1])
 
         result = atoms.copy()
+        result.set_constraint() # Make sure to explicitly delete any constraints
         result.set_atomic_numbers([a.number for a in new_atoms])
         result.set_positions([a.position for a in new_atoms])
 
         return result
 
-    def check_water_is_in_OHH_order(
-        self, atoms: Atoms, OH_distance_tol: float = 500000000000.0
-    ):
+    def check_water_is_in_OHH_order(self, atoms: Atoms, OH_distance_tol: float = 2.0):
         """Asserts that an atoms object contains water in the OHH order"""
 
         n_atoms = len(atoms)
@@ -90,8 +88,11 @@ class SCMEObjectiveFunction:
             assert atoms.numbers[idxH1] == 1
             assert atoms.numbers[idxH2] == 1
 
-            assert atoms.get_distance(idxO, idxH1, mic=True) < OH_distance_tol
-            assert atoms.get_distance(idxO, idxH2, mic=True) < OH_distance_tol
+            OH_dist1 = atoms.get_distance(idxO, idxH1, mic=True)
+            OH_dist2 = atoms.get_distance(idxO, idxH2, mic=True)
+
+            if OH_dist1 > OH_distance_tol or OH_dist2 > OH_distance_tol:
+                raise Exception(f"OH_distance too big for idx {idxO} ({OH_dist1}, {OH_dist2})")
 
     def dump_test_configurations(self, path_to_folder: Path):
         path_to_folder = Path(path_to_folder)
@@ -104,15 +105,13 @@ class SCMEObjectiveFunction:
         np.savetxt(path_to_folder / "energies.txt", self.reference_energies)
 
     def create_atoms_object_from_configuration(self, path_to_configuration: Path):
+        logger.debug(
+            f"creating atoms object from path {path_to_configuration}"
+        )
+
         atoms = read(path_to_configuration)
         atoms = self.arange_water_in_OHH_order(atoms)
         self.check_water_is_in_OHH_order(atoms)
-
-        n_atoms = len(atoms)
-
-        logger.debug(
-            f"creating atoms object from path {path_to_configuration}. n_atoms is {n_atoms}"
-        )
 
         scme_params = self.default_scme_params.copy()
 
