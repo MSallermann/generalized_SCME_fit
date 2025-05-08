@@ -1,78 +1,62 @@
 import logging
 from typing import Callable
 import numpy as np
-from typing import Optional
+from typing import Optional, Sequence, Dict
 
 logger = logging.getLogger(__name__)
 
 
 class Fitter:
+    """
+    Fits parameters by minimizing a weighted sum of individual contribution functions.
+    """
+
     def __init__(
         self,
-        objective_function_cb: Callable[[int, dict], float],
+        objective_function_cb: Callable[[int, Dict[str, float]], float],
         n_contributions: int,
-        weights: Optional[list[float]] = None,
+        weights: Optional[Sequence[float]] = None,
     ):
-        self.objective_function_cb = objective_function_cb
-        self.n_contributions = n_contributions
+        self.obj_cb = objective_function_cb
+        self.n_contrib = n_contributions
+        self.weights = (
+            np.ones(n_contributions) if weights is None else np.array(weights)
+        )
+        assert self.weights.shape == (n_contributions,)
+        self._keys: list[str] = []
 
-        if weights is None:
-            self.weights = np.ones(n_contributions)
-        else:
-            self.weights = np.array(weights)
-            assert len(weights) == n_contributions
-
-    def compute_total_objective_function(self, parameters: dict) -> float:
-        result = 0.0
-
-        for idx_cont in range(self.n_contributions):
-            p = parameters.copy()
-            current_contribution = self.objective_function_cb(idx_cont, p)
-            result += current_contribution * self.weights[idx_cont]
-            logger.debug(
-                f"... Computing contribution {idx_cont} = {current_contribution} (weight = {self.weights[idx_cont]})"
-            )
-
-        logger.debug(f"Current params = {parameters}")
-        logger.debug(f"total objective function = {result}")
+    def compute_total(self, params: Dict[str, float]) -> float:
+        result = 0
+        for i, w in enumerate(self.weights):
+            # We make a copy of params here, just in case the objective function modifies it
+            p = params.copy()
+            result += self.obj_cb(i, p) * w
 
         return result
 
-    def fit_scipy(self, initial_parameters: dict, **kwargs):
+    def fit_scipy(self, initial_parameters: Dict[str, float], **kwargs):
         from scipy.optimize import minimize
 
         logger.info(f"Start fitting with initial parameters {initial_parameters}")
         logger.info(
-            f"Initial objective function {self.compute_total_objective_function(initial_parameters)}"
+            f"Initial objective function {self.compute_total(initial_parameters)}"
         )
 
-        # Scipy expects a function with n real-valued parameters f( x )
-        # but our objective function takes a dictionary of parameters
-        # this is fine, we just define our objective function locally
-        def list_to_dict(x, keys):
-            if len(x) != len(keys):
-                raise Exception(f"{len(x) = }, {len(keys) = }, {keys = }")
+        # capture key order once
+        self._keys = list(initial_parameters.keys())
+        x0 = np.array([initial_parameters[k] for k in self._keys])
 
-            res = {k: v for k, v in zip(keys, x)}
+        # Scipy expects a function with n real-valued parameters f(x)
+        # but our objective function takes a dictionary of parameters.
+        # This is fine, we just define our objective function locally and
+        # put a parameters in a dictionary based on the captured keys
+        def f_scipy(x):
+            p = dict(zip(self._keys, x))
+            return self.compute_total(p)
 
-            return res
+        res = minimize(f_scipy, x0, **kwargs)
+        if not res.success:
+            logger.warning("Fit did not converge: %s", res.message)
 
-        def dict_to_list(params: dict):
-            return np.array(list(params.values()))
-
-        def objective_function_scipy(x):
-            params_cur = list_to_dict(x, keys=initial_parameters.keys())
-            return self.compute_total_objective_function(params_cur)
-
-        result = minimize(
-            objective_function_scipy, x0=dict_to_list(initial_parameters), **kwargs
-        )
-        x = result.x
-        opt_params = list_to_dict(x, initial_parameters.keys())
-
-        logger.info(
-            f"Final objective function {self.compute_total_objective_function(opt_params)}"
-        )
-        logger.info(f"Optimized_parameters {opt_params}")
-
-        return opt_params
+        opt_params = dict(zip(self._keys, res.x))
+        return opt_params  # full OptimizeResult
