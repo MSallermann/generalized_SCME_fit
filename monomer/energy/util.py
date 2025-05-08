@@ -81,9 +81,7 @@ def get_exponent_arrays(
     return exponents_i, exponents_j, exponents_k
 
 
-def write_params_to_file(
-    params, file, exponent_max, exponent_sum_max, skip_zero
-):
+def write_params_to_file(params, file, exponent_max, exponent_sum_max, skip_zero):
     with h5py.File(file, "w") as f:
         energy = f.create_group("energy")
 
@@ -102,6 +100,7 @@ def write_params_to_file(
 
         for k, v in params.items():
             write_pint_quantity_to_dataset(energy, k, v)
+
 
 def Va(r1, deoh, alphaoh):
     val = deoh * (jnp.exp(-2.0 * alphaoh * r1) - 2.0 * jnp.exp(-alphaoh * r1))
