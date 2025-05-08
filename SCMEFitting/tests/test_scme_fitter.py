@@ -9,13 +9,11 @@ from pathlib import Path
 logging.basicConfig(filename="test_scme_fitter.log", level=logging.INFO)
 
 
-def create_scme_fit_data(base_path : Path):
-    energies = np.loadtxt( base_path / "PES_dimer_c1_PBE.txt")[:,1]
+def create_scme_fit_data(base_path: Path):
+    energies = np.loadtxt(base_path / "PES_dimer_c1_PBE.txt")[:, 1]
     paths = list(base_path.glob("*/CONTCAR"))
-    sorted_paths = sorted(paths, key = lambda p : float(p.parent.name))
+    sorted_paths = sorted(paths, key=lambda p: float(p.parent.name))
     return sorted_paths, energies
-
-
 
 
 def test_scme_fitting():
@@ -23,14 +21,15 @@ def test_scme_fitting():
         "/home/moritz/SCME/generalized_SCME_interatomic_fit/SCMEFitting/scme_fitting/resources/PBE"
     )
 
-    paths_to_reference_configurations, energies = create_scme_fit_data(base_path)
+    paths_to_reference_configurations, reference_energies = create_scme_fit_data(base_path)
 
+    parametrization_key = "component_PBE_fullrange_reflect_4_5"
+    parametrization_key = "component_PBE_fullrange_reflect_6_9"
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
+
     parametrization_key = None
 
-    n_contributions = len(energies)
-
-    reference_energies = np.ones(n_contributions)
+    n_contributions = len(reference_energies)
 
     DEFAULT_PARAMS = SCMEParams()
     ADJUSTABLE_PARAMS = ["te", "td", "Ar", "Br", "Cr", "r_Br"]
@@ -43,11 +42,13 @@ def test_scme_fitting():
         reference_energies=reference_energies,
     )
 
+    objective_function.dump_test_configurations("test_configurations_scme")
+
     fitter = Fitter(
         objective_function_cb=objective_function, n_contributions=n_contributions
     )
 
-    initial_params = {k: dict(DEFAULT_PARAMS)[k] * 1.2 for k in ADJUSTABLE_PARAMS}
+    initial_params = {k: dict(DEFAULT_PARAMS)[k] for k in ADJUSTABLE_PARAMS}
 
     optimal_params = fitter.fit_scipy(
         initial_parameters=initial_params, tol=0, options=dict(maxiter=10, disp=True)

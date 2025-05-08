@@ -1,8 +1,10 @@
 from .scme_setup import setup_calculator, SCMEParams
-from ase.io import read
+from ase import Atoms
+from ase.io import read, write
+from ase.geometry import find_mic
 from pathlib import Path
-
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +31,83 @@ class SCMEObjectiveFunction:
         self.atoms_list = self.create_list_of_atom_objects()
 
     def assure_params(self, parameters: dict):
+        """Make sure that all the necessary keys are in our parameter dict"""
         for k in self.adjustable_params:
             if k not in parameters:
                 raise Exception(f"Could not find key {k} in `parameters`")
 
+    def arange_water_in_OHH_order(self, atoms: Atoms):
+        """Takes an atoms object and re-arranges it in the OHH order that the SCME expects"""
+        n_atoms = len(atoms)
+
+        assert n_atoms % 3 == 0
+        mask_O = atoms.numbers == 8
+
+        mask_H = atoms.numbers == 1
+
+        assert 2 * sum(mask_O) == sum(mask_H)
+
+        new_atoms = []
+
+        for atom_O in atoms[mask_O]:
+            assert atom_O.number == 8
+            new_atoms.append(atom_O)
+
+            # sort the hydrogens by ascending distance from the current oxygen
+            H_sorted = sorted(
+                atoms[mask_H],
+                key=lambda a: find_mic(atom_O.position - a.position, cell=atoms.cell)[
+                    1
+                ],
+            )
+
+            new_atoms.append(H_sorted[0])
+            new_atoms.append(H_sorted[1])
+
+        result = atoms.copy()
+        result.set_atomic_numbers([a.number for a in new_atoms])
+        result.set_positions([a.position for a in new_atoms])
+
+        return result
+
+    def check_water_is_in_OHH_order(
+        self, atoms: Atoms, OH_distance_tol: float = 500000000000.0
+    ):
+        """Asserts that an atoms object contains water in the OHH order"""
+
+        n_atoms = len(atoms)
+
+        assert n_atoms % 3 == 0
+
+        n_water = n_atoms // 3
+
+        for iwater in range(n_water):
+            idxO = 3 * iwater
+            idxH1 = idxO + 1
+            idxH2 = idxO + 2
+
+            assert atoms.numbers[idxO] == 8
+            assert atoms.numbers[idxH1] == 1
+            assert atoms.numbers[idxH2] == 1
+
+            assert atoms.get_distance(idxO, idxH1, mic=True) < OH_distance_tol
+            assert atoms.get_distance(idxO, idxH2, mic=True) < OH_distance_tol
+
+    def dump_test_configurations(self, path_to_folder: Path):
+        path_to_folder = Path(path_to_folder)
+
+        path_to_folder.mkdir(exist_ok=True, parents=True)
+
+        for i, atoms in enumerate(self.atoms_list):
+            write(path_to_folder / f"atoms_{i}.xyz", atoms)
+
+        np.savetxt(path_to_folder / "energies.txt", self.reference_energies)
+
     def create_atoms_object_from_configuration(self, path_to_configuration: Path):
         atoms = read(path_to_configuration)
+        atoms = self.arange_water_in_OHH_order(atoms)
+        self.check_water_is_in_OHH_order(atoms)
+
         n_atoms = len(atoms)
 
         logger.debug(

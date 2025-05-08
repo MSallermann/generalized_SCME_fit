@@ -175,6 +175,7 @@ def setup_calculator(
     scme_params: SCMEParams = DEFAULT_PARAMS,
     parametrization_key: Optional[str] = "component_PBE_fullrange_reflect_6_9",
 ) -> SCMECalculator:
+
     atoms.calc = SCMECalculator(atoms, **dict(scme_params))
     parameter_H2O.Assign_parameters_H20(atoms.calc.scme)
 
