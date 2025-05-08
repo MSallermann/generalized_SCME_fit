@@ -2,6 +2,7 @@ import logging
 from typing import Callable
 import numpy as np
 
+
 logger = logging.getLogger(__name__)
 
 
@@ -13,8 +14,6 @@ class Fitter:
         self.n_contributions = n_contributions
 
     def compute_total_objective_function(self, parameters: dict) -> float:
-        logger.debug("Computing total objective function ...")
-
         result = 0.0
 
         for idx_cont in range(self.n_contributions):
@@ -25,12 +24,16 @@ class Fitter:
                 f"... Computing contribution {idx_cont} = {current_contribution}"
             )
 
-        logger.debug(f"total_result = {result}")
+        logger.debug(f"Current params = {parameters}")
+        logger.debug(f"total objective function = {result}")
 
         return result
 
     def fit_scipy(self, initial_parameters: dict, **kwargs):
         from scipy.optimize import minimize
+
+        logger.info(f"Start fitting with initial parameters {initial_parameters}")
+        logger.info(f"Initial objective function {self.compute_total_objective_function(initial_parameters)}")
 
         # Scipy expects a function with n real-valued parameters f( x )
         # but our objective function takes a dictionary of parameters
@@ -54,5 +57,10 @@ class Fitter:
             objective_function_scipy, x0=dict_to_list(initial_parameters), **kwargs
         )
         x = result.x
+        opt_params = list_to_dict(x, initial_parameters.keys())
 
-        return list_to_dict(x, initial_parameters.keys())
+
+        logger.info(f"Final objective function {self.compute_total_objective_function(opt_params)}")
+        logger.info(f"Optimized_parameters {opt_params}")
+
+        return opt_params

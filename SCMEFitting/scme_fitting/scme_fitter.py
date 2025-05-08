@@ -47,6 +47,8 @@ class SCMEObjectiveFunction:
             atoms, scme_params=scme_params, parametrization_key=self.parametrization_key
         )
 
+        return atoms
+
     def create_list_of_atom_objects(self):
         atoms_list = []
         for p in self.paths_to_reference_configuration:
@@ -62,12 +64,25 @@ class SCMEObjectiveFunction:
 
         ## Update the params of the calculator
         for k, v in parameters.items():
-            logger.debug(f"Setting attr {k} = {v}")
-            atoms.calc.__setattr__(k, v)
+            logger.debug(f"Updating {k}")
+            logger.debug(f"  Prev value = {getattr(atoms.calc.scme, k)}")
+            logger.debug(f"  New value = {v}")
+            atoms.calc.scme.__setattr__(k, v)
 
-        # Compute the energy
+        # We have to make sure to trigger the update of the energy manually,
+        # because ase will think it can use the cached energy values,
+        # since none of the coordinates has changed
+        atoms.calc.calculate(atoms)
+
+        # Retrieve the potential energy
         energy = atoms.get_potential_energy()
+
         logger.debug(f"Calculated energy: {energy}")
+
+        logger.debug(f"  {atoms.calc.energy_electrostatic = }")
+        logger.debug(f"  {atoms.calc.energy_dispersion = }")
+        logger.debug(f"  {atoms.calc.energy_core = }")
+        logger.debug(f"  {atoms.calc.energy_monomer = }")
 
         objective_function_contribution = (energy - target_energy) ** 2 / n_atoms
 
