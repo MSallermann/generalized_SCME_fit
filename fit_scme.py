@@ -133,16 +133,14 @@ def run_scme_fitting(
 
 
 def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
-
     def process_csv(path_to_csv: Path):
-
         path_to_csv = Path(path_to_csv)
         df = pd.read_csv(path_to_csv)
         paths = [path_to_csv.parent.resolve() / p for p in df["file"]]
         tags = list(df["tag"])
         energies = list(df["reference_energy"])
 
-        weights = [1.0/len(energies) for _ in range(len(energies))]
+        weights = [60.0 / len(energies) for _ in range(len(energies))]
 
         return paths, tags, energies, weights
 
@@ -159,12 +157,9 @@ def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
         tags += t
         energies += e
 
-        # For the dimer we use different weights
-        w = [2.0 for i in range(len(e))]  # note this excludes the first configuration
-
+        # For we exclude the first and the last configuration since they are wonky
         w[0] = 0
-        w[-1] = 0  # we also exclude the last configuration since it's wonky
-
+        w[-1] = 0
         weights += w
 
     if clusters:
@@ -192,64 +187,17 @@ if __name__ == "__main__":
     logging.basicConfig(filename="fit_scme.log", level=logging.INFO)
 
     adjustable_params_disp = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    BUDGET = 100
+    BUDGET = 500
 
     # Only optimize on the dimers
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=True, clusters=False, ice=False
-    # )
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params_disp,
-    #     budget=BUDGET,
-    #     name="generalized_dimer",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     weights=weights,
-    # )
-
-    # Only optimize on the clusters
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=False, clusters=True, ice=False
-    # )
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params_disp,
-    #     budget=BUDGET,
-    #     name="generalized_cluster",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     weights=weights,
-    # )
-
-    # Optimize on the clusters + dimer
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=True, clusters=True, ice=False
-    # )
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params_disp,
-    #     budget=BUDGET,
-    #     name="generalized_dimer_cluster",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     weights=weights,
-    # )
-
     paths, tags, energies, weights = create_input_data(
-        functional="pbe", dimer=False, clusters=False, ice=True
+        functional="pbe", dimer=True, clusters=False, ice=False
     )
     run_scme_fitting(
         parametrization_key="component_PBE_fullrange_reflect_8_12",
         adjustable_params=adjustable_params_disp,
-        budget=10,
-        name="generalized_dimer_cluster_ice",
+        budget=BUDGET,
+        name="generalized_dimer",
         default_params=SCMEParams(),
         paths=paths,
         tags=tags,
@@ -257,58 +205,49 @@ if __name__ == "__main__":
         weights=weights,
     )
 
-    # run_scme_fitting(
-    #     parametrization_key=None,
-    #     dimer_stretch=True,
-    #     small_clusters=False,
-    #     adjustable_params=adjustable_params,
-    #     which="pbe",
-    #     name="pbe_rigid_dimers",
-    # )
+    # Only optimize on the clusters
+    paths, tags, energies, weights = create_input_data(
+        functional="pbe", dimer=False, clusters=True, ice=False
+    )
+    run_scme_fitting(
+        parametrization_key="component_PBE_fullrange_reflect_8_12",
+        adjustable_params=adjustable_params_disp,
+        budget=BUDGET,
+        name="generalized_cluster",
+        default_params=SCMEParams(),
+        paths=paths,
+        tags=tags,
+        energies=energies,
+        weights=weights,
+    )
 
+    # Optimize on the clusters + dimer
+    paths, tags, energies, weights = create_input_data(
+        functional="pbe", dimer=True, clusters=True, ice=False
+    )
+    run_scme_fitting(
+        parametrization_key="component_PBE_fullrange_reflect_8_12",
+        adjustable_params=adjustable_params_disp,
+        budget=BUDGET,
+        name="generalized_dimer_cluster",
+        default_params=SCMEParams(),
+        paths=paths,
+        tags=tags,
+        energies=energies,
+        weights=weights,
+    )
+
+    # paths, tags, energies, weights = create_input_data(
+    #     functional="pbe", dimer=False, clusters=False, ice=True
+    # )
     # run_scme_fitting(
-    #     parametrization_key=None,
-    #     dimer_stretch=True,
-    #     small_clusters=False,
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
     #     adjustable_params=adjustable_params_disp,
-    #     which="pbe",
-    #     name="pbe_rigid_dimers_disp",
-    # )
-
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     dimer_stretch=True,
-    #     small_clusters=False,
-    #     adjustable_params=adjustable_params,
-    #     which="pbe",
-    #     name="pbe_generalized_8_12_dimers",
-    # )
-
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     dimer_stretch=True,
-    #     small_clusters=False,
-    #     adjustable_params=adjustable_params_disp,
-    #     which="pbe",
-    #     name="pbe_generalized_8_12_dimers_disp",
-    # )
-
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     dimer_stretch=True,
-    #     small_clusters=True,
-    #     adjustable_params=adjustable_params,
-    #     which="pbe",
-    #     name="pbe_generalized_8_12_dimers_and_clusters",
-    # )
-
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     dimer_stretch=True,
-    #     small_clusters=True,
-    #     ice=True,
-    #     budget=0,
-    #     adjustable_params=adjustable_params_disp,
-    #     which="pbe",
-    #     name="pbe_generalized_8_12_dimers_and_clusters_and_ice_adjust_disp",
+    #     budget=10,
+    #     name="generalized_dimer_cluster_ice",
+    #     default_params=SCMEParams(),
+    #     paths=paths,
+    #     tags=tags,
+    #     energies=energies,
+    #     weights=weights,
     # )

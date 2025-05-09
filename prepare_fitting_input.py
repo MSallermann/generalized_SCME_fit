@@ -66,8 +66,8 @@ def get_ice(base_path: Path, functional_str: str):
 
     e_v_data = np.loadtxt(base_path / functional_str / "E_V.data")
 
-    tags = [f"Ice_rescaled_{p}_percent" for p in e_v_data[:, 0]]
-    energies = e_v_data[:, 1]
+    tags = [f"Ice_volume_rescaled_{p}_percent" for p in e_v_data[:, 0]]
+    energies = e_v_data[:, 2]
 
     return {"paths": paths, "energies": energies, "tags": tags}
 
@@ -76,26 +76,26 @@ path_to_scme_input = Path(
     "/home/moritz/SCME/generalized_SCME_interatomic_fit/scme_input"
 )
 
-path_to_dimer_stretch = path_to_scme_input / "Intermolecular/PES/Dimer/C1"
-dimer_stretch_PBE = get_dimer_stretch_data(path_to_dimer_stretch / "PBE")
-df_pbe_dimer_stretch = pd.DataFrame(dimer_stretch_PBE)
-df_pbe_dimer_stretch.to_csv("pbe_dimer_stretch.csv")
+# path_to_dimer_stretch = path_to_scme_input / "Intermolecular/PES/Dimer/C1"
+# dimer_stretch_PBE = get_dimer_stretch_data(path_to_dimer_stretch / "PBE")
+# df_pbe_dimer_stretch = pd.DataFrame(dimer_stretch_PBE)
+# df_pbe_dimer_stretch.to_csv("pbe_dimer_stretch.csv")
 
-dimer_stretch_beef = get_dimer_stretch_data(path_to_dimer_stretch / "BEEF-vdW")
-df_beef_dimer_stretch = pd.DataFrame(dimer_stretch_beef)
-df_beef_dimer_stretch.to_csv("beef_dimer_stretch.csv")
+# dimer_stretch_beef = get_dimer_stretch_data(path_to_dimer_stretch / "BEEF-vdW")
+# df_beef_dimer_stretch = pd.DataFrame(dimer_stretch_beef)
+# df_beef_dimer_stretch.to_csv("beef_dimer_stretch.csv")
 
 
-path_to_small_clusters = path_to_scme_input / "Intermolecular/Clusters/Small"
-small_clusters_PBE = get_scmall_clusters(path_to_small_clusters, functional_str="PBE")
-df_small_clusters_PBE = pd.DataFrame(small_clusters_PBE)
-df_small_clusters_PBE.to_csv("pbe_small_clusters.csv")
+# path_to_small_clusters = path_to_scme_input / "Intermolecular/Clusters/Small"
+# small_clusters_PBE = get_scmall_clusters(path_to_small_clusters, functional_str="PBE")
+# df_small_clusters_PBE = pd.DataFrame(small_clusters_PBE)
+# df_small_clusters_PBE.to_csv("pbe_small_clusters.csv")
 
-small_clusters_beef = get_scmall_clusters(
-    path_to_small_clusters, functional_str="BEEF-vdW"
-)
-df_small_clusters_beef = pd.DataFrame(small_clusters_beef)
-df_small_clusters_beef.to_csv("beef_small_clusters.csv")
+# small_clusters_beef = get_scmall_clusters(
+#     path_to_small_clusters, functional_str="BEEF-vdW"
+# )
+# df_small_clusters_beef = pd.DataFrame(small_clusters_beef)
+# df_small_clusters_beef.to_csv("beef_small_clusters.csv")
 
 path_to_ice = path_to_scme_input / "Intermolecular/Crystals/Ice-IH"
 ice_pbe = get_ice(path_to_ice, functional_str="PBE")
