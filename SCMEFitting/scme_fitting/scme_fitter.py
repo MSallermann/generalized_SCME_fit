@@ -195,6 +195,7 @@ class SCMEObjectiveFunction:
             "tag": self.tags,
             "reference_energy": self.reference_energies,
             "file": filenames,
+            "n_atoms": [len(a) for a in self.atoms_list],
         }
 
         df = pd.DataFrame(df_data)

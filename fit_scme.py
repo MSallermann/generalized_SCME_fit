@@ -74,6 +74,8 @@ def run_scme_fitting(
     )
 
     meta = dict()
+    meta["name"] = name
+    meta["parametrization_key"] = parametrization_key
     meta["scme_version"] = {
         "branch": pyscme.version.branch(),
         "commit": pyscme.version.commit(),
@@ -85,16 +87,23 @@ def run_scme_fitting(
     dump_dict_to_file(output_folder / "optimal_params.json", optimal_params)
     dump_dict_to_file(output_folder / "default_params.json", dict(default_params))
 
+    np.savetxt(output_folder / "weights.txt", weights)
+
     energies_scme = {
         "tag": objective_function.tags,
-        "initial": [
-            objective_function.get_energy(i, initial_params)
-            for i in range(n_contributions)
-        ],
-        "optimized": [
-            objective_function.get_energy(i, optimal_params)
-            for i in range(n_contributions)
-        ],
+        "initial": np.array(
+            [
+                objective_function.get_energy(i, initial_params)
+                for i in range(n_contributions)
+            ]
+        ),
+        "optimized": np.array(
+            [
+                objective_function.get_energy(i, optimal_params)
+                for i in range(n_contributions)
+            ]
+        ),
+        "n_atoms": np.array([len(a) for a in objective_function.atoms_list]),
     }
 
     energies_scme_df = pd.DataFrame(energies_scme)
@@ -104,33 +113,36 @@ def run_scme_fitting(
     ax = plt.gca()
     fig = plt.gcf()
 
-    ax.plot(energies, marker=".", label="reference")
+    ax.plot(energies / energies_scme["n_atoms"], marker=".", label="reference")
     ax.plot(
-        energies_scme["initial"],
+        energies_scme["initial"] / energies_scme["n_atoms"],
         marker=".",
         label="initial parameters",
     )
     ax.plot(
-        energies_scme["optimized"],
+        energies_scme["optimized"] / energies_scme["n_atoms"],
         marker=".",
         label="fitted parameters",
     )
     ax.set_xticks(range(len(energies)))
     ax.set_xticklabels(tags, rotation=90)
-    ax.set_ylabel("energy [meV]")
+    ax.set_ylabel("energy [meV] / n_atoms")
     ax.legend()
     fig.tight_layout()
     fig.savefig(output_folder / "plot.png", dpi=300)
 
 
 def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
+
     def process_csv(path_to_csv: Path):
+
         path_to_csv = Path(path_to_csv)
         df = pd.read_csv(path_to_csv)
         paths = [path_to_csv.parent.resolve() / p for p in df["file"]]
         tags = list(df["tag"])
         energies = list(df["reference_energy"])
-        weights = [1.0 for _ in range(len(energies))]
+
+        weights = [1.0/len(energies) for _ in range(len(energies))]
 
         return paths, tags, energies, weights
 
@@ -148,7 +160,11 @@ def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
         energies += e
 
         # For the dimer we use different weights
-        w = [i for i in range(len(e))]
+        w = [2.0 for i in range(len(e))]  # note this excludes the first configuration
+
+        w[0] = 0
+        w[-1] = 0  # we also exclude the last configuration since it's wonky
+
         weights += w
 
     if clusters:
@@ -161,7 +177,7 @@ def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
         weights += w
 
     if ice:
-        path_to_csv = f"./{functional}_reference_configs/clusters/energies.csv"
+        path_to_csv = f"./{functional}_reference_configs/ice/energies.csv"
         p, t, e, w = process_csv(path_to_csv)
 
         paths += p
@@ -178,15 +194,62 @@ if __name__ == "__main__":
     adjustable_params_disp = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
     BUDGET = 100
 
-    paths, tags, energies, weights = create_input_data(
-        functional="pbe", dimer=True, clusters=False, ice=False
-    )
+    # Only optimize on the dimers
+    # paths, tags, energies, weights = create_input_data(
+    #     functional="pbe", dimer=True, clusters=False, ice=False
+    # )
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     adjustable_params=adjustable_params_disp,
+    #     budget=BUDGET,
+    #     name="generalized_dimer",
+    #     default_params=SCMEParams(),
+    #     paths=paths,
+    #     tags=tags,
+    #     energies=energies,
+    #     weights=weights,
+    # )
 
+    # Only optimize on the clusters
+    # paths, tags, energies, weights = create_input_data(
+    #     functional="pbe", dimer=False, clusters=True, ice=False
+    # )
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     adjustable_params=adjustable_params_disp,
+    #     budget=BUDGET,
+    #     name="generalized_cluster",
+    #     default_params=SCMEParams(),
+    #     paths=paths,
+    #     tags=tags,
+    #     energies=energies,
+    #     weights=weights,
+    # )
+
+    # Optimize on the clusters + dimer
+    # paths, tags, energies, weights = create_input_data(
+    #     functional="pbe", dimer=True, clusters=True, ice=False
+    # )
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     adjustable_params=adjustable_params_disp,
+    #     budget=BUDGET,
+    #     name="generalized_dimer_cluster",
+    #     default_params=SCMEParams(),
+    #     paths=paths,
+    #     tags=tags,
+    #     energies=energies,
+    #     weights=weights,
+    # )
+
+    paths, tags, energies, weights = create_input_data(
+        functional="pbe", dimer=False, clusters=False, ice=True
+    )
     run_scme_fitting(
         parametrization_key="component_PBE_fullrange_reflect_8_12",
         adjustable_params=adjustable_params_disp,
-        budget=BUDGET,
-        name="generalized_dimer",
+        budget=10,
+        name="generalized_dimer_cluster_ice",
         default_params=SCMEParams(),
         paths=paths,
         tags=tags,
