@@ -52,6 +52,26 @@ def get_scmall_clusters(base_path: Path, functional_str: str):
     return {"paths": paths, "energies": energies, "tags": tags}
 
 
+def get_ice(base_path: Path, functional_str: str):
+    from ase.io import read, write
+
+    assert_exists(base_path)
+
+    path_to_xyz = list((base_path / functional_str).glob("ice-Ih*.xyz"))[0]
+
+    atoms_list = read(path_to_xyz, index=":")
+
+    [write(path_to_xyz.parent / f"ice_{i}.xyz", a) for i, a in enumerate(atoms_list)]
+    paths = [path_to_xyz.parent / f"ice_{i}.xyz" for i, a in enumerate(atoms_list)]
+
+    e_v_data = np.loadtxt(base_path / functional_str / "E_V.data")
+
+    tags = [f"Ice+volume_rescaled_{p}_percent" for p in e_v_data[:, 0]]
+    energies = e_v_data[:, 1]
+
+    return {"paths": paths, "energies": energies, "tags": tags}
+
+
 path_to_scme_input = Path(
     "/home/moritz/SCME/generalized_SCME_interatomic_fit/scme_input"
 )
@@ -76,3 +96,12 @@ small_clusters_beef = get_scmall_clusters(
 )
 df_small_clusters_beef = pd.DataFrame(small_clusters_beef)
 df_small_clusters_beef.to_csv("beef_small_clusters.csv")
+
+path_to_ice = path_to_scme_input / "Intermolecular/Crystals/Ice-IH"
+ice_pbe = get_ice(path_to_ice, functional_str="PBE")
+df_ice_pbe = pd.DataFrame(ice_pbe)
+df_ice_pbe.to_csv("pbe_ice.csv")
+
+ice_beef = get_ice(path_to_ice, functional_str="BEEF-vdW")
+df_ice_beef = pd.DataFrame(ice_beef)
+df_ice_beef.to_csv("beef_ice.csv")
