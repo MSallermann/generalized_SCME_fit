@@ -128,9 +128,9 @@ class SCMEParams(BaseModel):
 def setup_expansions(calc: SCMECalculator, parametrization_key: str):
     file = __FOLDER__ / "resources/scme_expansions.hdf5"
 
-    logging.info("Setting up expansions")
-    logging.info(f"    {parametrization_key = }")
-    logging.info(f"    {file = }")
+    logging.debug("Setting up expansions")
+    logging.debug(f"    {parametrization_key = }")
+    logging.debug(f"    {file = }")
 
     energy_expansion = get_energy_expansion_from_hdf5_file(
         path_to_file=file, key_to_dataset="energy"

@@ -19,6 +19,7 @@ class SCMEObjectiveFunction:
         parametrization_key: str,
         paths_to_reference_configuration: list[Path],
         reference_energies: list[float],
+        divide_by_n_atoms: bool = False,
         tags: Optional[list[str]] = None,
     ):
         """
@@ -40,6 +41,9 @@ class SCMEObjectiveFunction:
             File paths for each reference configuration (xyz files).
         reference_energies : Sequence[float]
             Target energies corresponding to each reference configuration.
+        divide_by_n_atoms : bool = False
+            Wether to divide the objective function by n_atoms. Leading to contributions
+            of the form: (energy - reference)^2 / n_atoms
         tags: Optional[Sequence[str]] = None
             Optional tags for each configuration (used for logging and output purposes)
 
@@ -57,6 +61,8 @@ class SCMEObjectiveFunction:
                 f"Mismatch: {len(paths_to_reference_configuration)} paths vs. "
                 f"{len(reference_energies)} energies"
             )
+
+        self.divide_by_n_atoms = divide_by_n_atoms
 
         if tags is None:
             self.tags = [""] * n_contributions
@@ -288,6 +294,11 @@ class SCMEObjectiveFunction:
         target_energy = self.reference_energies[idx]
         objective_function_contribution = (energy - target_energy) ** 2
 
+        if self.divide_by_n_atoms:
+            n_atoms = len(self.atoms_list[idx])
+            objective_function_contribution /= n_atoms
+
+        logger.debug(f"Current params = {parameters}")
         logger.debug(f"Objective function value = {objective_function_contribution}")
 
         return objective_function_contribution

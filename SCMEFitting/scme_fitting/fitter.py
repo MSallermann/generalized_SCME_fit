@@ -2,6 +2,7 @@ import logging
 from typing import Callable
 import numpy as np
 from typing import Optional, Sequence, Dict
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +79,21 @@ class Fitter:
 
         return result
 
+    def hook_pre_fit(self, initial_parameters: Dict):
+        self.time_fit_start = time.time()
+
+        logger.info(f"Start fitting with initial parameters {initial_parameters}")
+        logger.info(
+            f"Initial objective function {self.compute_total(initial_parameters)}"
+        )
+
+    def hook_post_fit(self, opt_params: Dict):
+        self.time_fit_end = time.time()
+
+        logger.info(f"Final objective function {self.compute_total(opt_params)}")
+        logger.info(f"Optimal parameters {opt_params}")
+        logger.info(f"Time taken {self.time_fit_end - self.time_fit_start} seconds")
+
     def fit_nevergrad(self, initial_parameters: Dict, budget: int, **kwargs) -> Dict:
         """
         Optimize parameters using Nevergrad`s NgIohTuned function.
@@ -109,8 +125,9 @@ class Fitter:
         >>> print(optimal_params)
         {'x': 2.0, 'y': -1.0}
         """
-
         import nevergrad as ng
+
+        self.hook_pre_fit(initial_parameters)
 
         ng_params = ng.p.Dict(
             **{k: ng.p.Scalar(v) for k, v in initial_parameters.items()}
@@ -124,7 +141,11 @@ class Fitter:
         args, kwargs = recommendation.value
 
         # Our optimal params are the first positional argument
-        return args[0]
+        opt_params = args[0]
+
+        self.hook_post_fit(opt_params)
+
+        return opt_params
 
     def fit_scipy(self, initial_parameters: Dict[str, float], **kwargs) -> Dict:
         """
@@ -162,10 +183,7 @@ class Fitter:
 
         from scipy.optimize import minimize
 
-        logger.info(f"Start fitting with initial parameters {initial_parameters}")
-        logger.info(
-            f"Initial objective function {self.compute_total(initial_parameters)}"
-        )
+        self.hook_pre_fit(initial_parameters)
 
         # capture key order once
         self._keys = list(initial_parameters.keys())
@@ -184,4 +202,7 @@ class Fitter:
             logger.warning("Fit did not converge: %s", res.message)
 
         opt_params = dict(zip(self._keys, res.x))
-        return opt_params  # full OptimizeResult
+
+        self.hook_post_fit(opt_params)
+
+        return opt_params
