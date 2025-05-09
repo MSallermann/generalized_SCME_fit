@@ -176,10 +176,7 @@ class SCMEObjectiveFunction:
         for i, atoms in enumerate(self.atoms_list):
             write(path_to_folder / f"atoms_{i}_{self.tags[i]}.xyz", atoms)
 
-        df_data = {
-            "tag" : self.tags,
-            "reference_energy" : self.reference_energies
-        }
+        df_data = {"tag": self.tags, "reference_energy": self.reference_energies}
 
         df = pd.DataFrame(df_data)
         df.to_csv(path_to_folder / "energies.csv")
@@ -264,7 +261,9 @@ class SCMEObjectiveFunction:
         # Therefore, we explicitly call the `calculate` function
         atoms.calc.calculate(atoms)
         energy = atoms.get_potential_energy()
-        logger.debug(f"Calculated energy for idx {idx} (tag = {self.tags[idx]}): {energy}")
+        logger.debug(
+            f"Calculated energy for idx {idx} (tag = {self.tags[idx]}): {energy}"
+        )
         return energy
 
     def __call__(self, idx: int, parameters: dict):
