@@ -4,8 +4,9 @@ from ase.io import read, write
 from ase.geometry import find_mic
 from pathlib import Path
 import logging
-import numpy as np
+from typing import Optional
 
+import pandas as pd
 from typing import List, Dict
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,7 @@ class SCMEObjectiveFunction:
         parametrization_key: str,
         paths_to_reference_configuration: list[Path],
         reference_energies: list[float],
+        tags: Optional[list[str]] = None,
     ):
         """
         Functor for computing squared-error energy contributions using SCME.
@@ -38,6 +40,8 @@ class SCMEObjectiveFunction:
             File paths for each reference configuration (xyz files).
         reference_energies : Sequence[float]
             Target energies corresponding to each reference configuration.
+        tags: Optional[Sequence[str]] = None
+            Optional tags for each configuration (used for logging and output purposes)
 
         Raises
         ------
@@ -46,11 +50,22 @@ class SCMEObjectiveFunction:
             `reference_energies` do not match.
         """
 
-        if len(paths_to_reference_configuration) != len(reference_energies):
+        n_contributions = len(reference_energies)
+
+        if len(paths_to_reference_configuration) != n_contributions:
             raise ValueError(
                 f"Mismatch: {len(paths_to_reference_configuration)} paths vs. "
                 f"{len(reference_energies)} energies"
             )
+
+        if tags is None:
+            self.tags = [""] * n_contributions
+        else:
+            if len(tags) != n_contributions:
+                raise ValueError(
+                    f"Mismatch: {len(tags)} tags vs. {len(reference_energies)} energies"
+                )
+            self.tags = tags
 
         self.default_scme_params: SCMEParams = default_scme_params
         self.parametrization_key: str = parametrization_key
@@ -152,16 +167,22 @@ class SCMEObjectiveFunction:
         Parameters
         ----------
         path_to_folder : Path
-            Directory where to save `atoms_i.xyz` and `energies.txt`.
+            Directory where to save `atoms_{i}_{tag[i]}.xyz` and `energies.csv`.
         """
         path_to_folder = Path(path_to_folder)
 
         path_to_folder.mkdir(exist_ok=True, parents=True)
 
         for i, atoms in enumerate(self.atoms_list):
-            write(path_to_folder / f"atoms_{i}.xyz", atoms)
+            write(path_to_folder / f"atoms_{i}_{self.tags[i]}.xyz", atoms)
 
-        np.savetxt(path_to_folder / "energies.txt", self.reference_energies)
+        df_data = {
+            "tag" : self.tags,
+            "reference_energy" : self.reference_energies
+        }
+
+        df = pd.DataFrame(df_data)
+        df.to_csv(path_to_folder / "energies.csv")
 
     def create_atoms_object_from_configuration(
         self, path_to_configuration: Path
@@ -241,10 +262,9 @@ class SCMEObjectiveFunction:
         # because ase will think it can use the cached energy values,
         # since none of the coordinates has changed.
         # Therefore, we explicitly call the `calculate` function
-
         atoms.calc.calculate(atoms)
         energy = atoms.get_potential_energy()
-        logger.debug(f"Calculated energy for idx {idx}: {energy}")
+        logger.debug(f"Calculated energy for idx {idx} (tag = {self.tags[idx]}): {energy}")
         return energy
 
     def __call__(self, idx: int, parameters: dict):

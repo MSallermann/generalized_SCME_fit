@@ -14,14 +14,15 @@ def create_scme_fit_data(base_path: Path):
     energies = np.loadtxt(base_path / "PES_dimer_c1_PBE.txt")[:, 1]
     paths = list(base_path.glob("*/CONTCAR"))
     sorted_paths = sorted(paths, key=lambda p: float(p.parent.name))
-    return sorted_paths, energies
+    tags = [p.parent.name for p in sorted_paths]
+    return sorted_paths, energies, tags
 
 
 def test_scme_fitting():
     base_path = Path(
         "/home/moritz/SCME/generalized_SCME_interatomic_fit/SCMEFitting/scme_fitting/resources/PBE"
     )
-    paths_to_reference_configurations, reference_energies = create_scme_fit_data(
+    paths_to_reference_configurations, reference_energies, tags = create_scme_fit_data(
         base_path
     )
 
@@ -40,6 +41,7 @@ def test_scme_fitting():
         parametrization_key=parametrization_key,
         paths_to_reference_configuration=paths_to_reference_configurations,
         reference_energies=reference_energies,
+        tags=tags,
     )
 
     objective_function.dump_test_configurations("test_configurations_scme")
