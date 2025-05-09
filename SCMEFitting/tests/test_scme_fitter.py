@@ -38,7 +38,6 @@ def test_scme_fitting():
     objective_function = SCMEObjectiveFunction(
         default_scme_params=DEFAULT_PARAMS,
         parametrization_key=parametrization_key,
-        adjustable_params=ADJUSTABLE_PARAMS,
         paths_to_reference_configuration=paths_to_reference_configurations,
         reference_energies=reference_energies,
     )

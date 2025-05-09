@@ -16,7 +16,6 @@ class SCMEObjectiveFunction:
         self,
         default_scme_params: SCMEParams,
         parametrization_key: str,
-        adjustable_params: list[str],
         paths_to_reference_configuration: list[Path],
         reference_energies: list[float],
     ):
@@ -35,8 +34,6 @@ class SCMEObjectiveFunction:
             Default SCME parameter object to copy for each configuration.
         parametrization_key : str
             Key selecting the parametrization for the moment and monomer energy expansion.
-        adjustable_params : Sequence[str]
-            Names of SCME parameters that will be adjusted during fitting.
         paths_to_reference_configuration : Sequence[Path]
             File paths for each reference configuration (xyz files).
         reference_energies : Sequence[float]
@@ -57,31 +54,12 @@ class SCMEObjectiveFunction:
 
         self.default_scme_params: SCMEParams = default_scme_params
         self.parametrization_key: str = parametrization_key
-        self.adjustable_params: List[str] = list(adjustable_params)
         self.paths_to_reference_configuration: List[Path] = list(
             paths_to_reference_configuration
         )
         self.reference_energies: List[float] = list(reference_energies)
 
         self.atoms_list: List[Atoms] = self._create_list_of_atom_objects()
-
-    def assure_params(self, parameters: Dict[str, float]) -> None:
-        """
-        Ensure all adjustable parameters are present in the input dict.
-
-        Parameters
-        ----------
-        parameters : Dict[str, float]
-            Parameter values to check.
-
-        Raises
-        ------
-        KeyError
-            If any adjustable parameter is missing.
-        """
-        for key in self.adjustable_params:
-            if key not in parameters:
-                raise KeyError(f"Missing parameter '{key}' in input dict")
 
     def arange_water_in_OHH_order(self, atoms: Atoms) -> Atoms:
         """
@@ -249,10 +227,15 @@ class SCMEObjectiveFunction:
         KeyError
             If required parameters are missing.
         """
-        self.assure_params(parameters)
+
         atoms = self.atoms_list[idx]
         for key, value in parameters.items():
-            setattr(atoms.calc.scme, key, value)
+            if hasattr(atoms.calc.scme, key):
+                setattr(atoms.calc.scme, key, value)
+            else:
+                raise KeyError(
+                    f"There was a key in the parameters dict, which cannot be set on the scmecpp.Potential object. The offending key was {key}"
+                )
 
         # We have to make sure to trigger the update of the energy manually,
         # because ase will think it can use the cached energy values,
