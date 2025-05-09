@@ -66,7 +66,7 @@ def get_ice(base_path: Path, functional_str: str):
 
     e_v_data = np.loadtxt(base_path / functional_str / "E_V.data")
 
-    tags = [f"Ice+volume_rescaled_{p}_percent" for p in e_v_data[:, 0]]
+    tags = [f"Ice_rescaled_{p}_percent" for p in e_v_data[:, 0]]
     energies = e_v_data[:, 1]
 
     return {"paths": paths, "energies": energies, "tags": tags}

@@ -8,6 +8,7 @@ from typing import Optional
 from pathlib import Path
 import json
 import pyscme
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -27,16 +28,16 @@ def dump_dict_to_file(file: Path, dictionary: dict):
 
 
 def run_scme_fitting(
-    parametrization_key: str = "component_PBE_fullrange_reflect_8_12",
-    which: str = "pbe",
-    adjustable_params: list[str] = ["te", "td", "Ar", "Br", "Cr", "r_Br"],
+    parametrization_key: str,
+    adjustable_params: list[str],
+    budget: int,
+    name: str,
+    default_params: SCMEParams,
+    paths: list[Path],
+    energies: list[float],
+    tags: Optional[list[float]] = None,
+    weights: Optional[list[float]] = None,
     output_folder: Optional[Path] = None,
-    default_params: SCMEParams = SCMEParams(),
-    budget: int = 100,
-    dimer_stretch: bool = True,
-    small_clusters: bool = True,
-    ice: bool = False,
-    name: Optional[str] = None,
 ):
     if output_folder is None:
         output_folder = find_output_folder_that_does_not_exist(f"./{name}")
@@ -45,30 +46,6 @@ def run_scme_fitting(
 
     print(f"Output folder: {output_folder}")
     logger.info(f"Output folder: {output_folder}")
-
-    df_list = []
-    weights = []
-
-    # for the dimer stretch, we scale the contributions with the O-O distance
-    # so that the short separations are weighted less
-    if dimer_stretch:
-        df_list.append(pd.read_csv(f"./{which}_dimer_stretch.csv"))
-        weights += [float(i) ** 1 for i in range(len(df_list[0]))]
-
-    if small_clusters:
-        df_list.append(pd.read_csv(f"./{which}_small_clusters.csv"))
-        weights += [1.0 for t in df_list[1]["tags"]]
-
-    if ice:
-        raise NotImplementedError()
-
-    paths = []
-    energies = []
-    tags = []
-    for df in df_list:
-        paths += list(df["paths"])
-        energies += list(df["energies"])
-        tags += list(df["tags"])
 
     objective_function = SCMEObjectiveFunction(
         default_scme_params=default_params,
@@ -129,12 +106,12 @@ def run_scme_fitting(
 
     ax.plot(energies, marker=".", label="reference")
     ax.plot(
-        "initial",
+        energies_scme["initial"],
         marker=".",
         label="initial parameters",
     )
     ax.plot(
-        "optimized",
+        energies_scme["optimized"],
         marker=".",
         label="fitted parameters",
     )
@@ -146,62 +123,129 @@ def run_scme_fitting(
     fig.savefig(output_folder / "plot.png", dpi=300)
 
 
+def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
+    def process_csv(path_to_csv: Path):
+        path_to_csv = Path(path_to_csv)
+        df = pd.read_csv(path_to_csv)
+        paths = [path_to_csv.parent.resolve() / p for p in df["file"]]
+        tags = list(df["tag"])
+        energies = list(df["reference_energy"])
+        weights = [1.0 for _ in range(len(energies))]
+
+        return paths, tags, energies, weights
+
+    paths = []
+    tags = []
+    energies = []
+    weights = []
+
+    if dimer:
+        path_to_csv = f"./{functional}_reference_configs/dimer/energies.csv"
+        p, t, e, w = process_csv(path_to_csv)
+
+        paths += p
+        tags += t
+        energies += e
+
+        # For the dimer we use different weights
+        w = [i for i in range(len(e))]
+        weights += w
+
+    if clusters:
+        path_to_csv = f"./{functional}_reference_configs/clusters/energies.csv"
+        p, t, e, w = process_csv(path_to_csv)
+
+        paths += p
+        tags += t
+        energies += e
+        weights += w
+
+    if ice:
+        path_to_csv = f"./{functional}_reference_configs/clusters/energies.csv"
+        p, t, e, w = process_csv(path_to_csv)
+
+        paths += p
+        tags += t
+        energies += e
+        weights += w
+
+    return paths, tags, energies, weights
+
+
 if __name__ == "__main__":
     logging.basicConfig(filename="fit_scme.log", level=logging.INFO)
 
-    adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br"]
     adjustable_params_disp = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
+    BUDGET = 100
 
-    run_scme_fitting(
-        parametrization_key=None,
-        dimer_stretch=True,
-        small_clusters=False,
-        adjustable_params=adjustable_params,
-        which="pbe",
-        name="pbe_rigid_dimers",
+    paths, tags, energies, weights = create_input_data(
+        functional="pbe", dimer=True, clusters=False, ice=False
     )
 
     run_scme_fitting(
-        parametrization_key=None,
-        dimer_stretch=True,
-        small_clusters=False,
+        parametrization_key="component_PBE_fullrange_reflect_8_12",
         adjustable_params=adjustable_params_disp,
-        which="pbe",
-        name="pbe_rigid_dimers_disp",
+        budget=BUDGET,
+        name="generalized_dimer",
+        default_params=SCMEParams(),
+        paths=paths,
+        tags=tags,
+        energies=energies,
+        weights=weights,
     )
 
-    run_scme_fitting(
-        parametrization_key="component_PBE_fullrange_reflect_8_12",
-        dimer_stretch=True,
-        small_clusters=False,
-        adjustable_params=adjustable_params,
-        which="pbe",
-        name="pbe_generalized_8_12_dimers",
-    )
+    # run_scme_fitting(
+    #     parametrization_key=None,
+    #     dimer_stretch=True,
+    #     small_clusters=False,
+    #     adjustable_params=adjustable_params,
+    #     which="pbe",
+    #     name="pbe_rigid_dimers",
+    # )
 
-    run_scme_fitting(
-        parametrization_key="component_PBE_fullrange_reflect_8_12",
-        dimer_stretch=True,
-        small_clusters=False,
-        adjustable_params=adjustable_params_disp,
-        which="pbe",
-        name="pbe_generalized_8_12_dimers_disp",
-    )
+    # run_scme_fitting(
+    #     parametrization_key=None,
+    #     dimer_stretch=True,
+    #     small_clusters=False,
+    #     adjustable_params=adjustable_params_disp,
+    #     which="pbe",
+    #     name="pbe_rigid_dimers_disp",
+    # )
 
-    run_scme_fitting(
-        parametrization_key="component_PBE_fullrange_reflect_8_12",
-        dimer_stretch=True,
-        small_clusters=True,
-        adjustable_params=adjustable_params,
-        which="pbe",
-        name="pbe_generalized_8_12_dimers_and_clusters",
-    )
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     dimer_stretch=True,
+    #     small_clusters=False,
+    #     adjustable_params=adjustable_params,
+    #     which="pbe",
+    #     name="pbe_generalized_8_12_dimers",
+    # )
 
-    run_scme_fitting(
-        parametrization_key="component_PBE_fullrange_reflect_8_12",
-        dimer_stretch=True,
-        small_clusters=True,
-        adjustable_params=adjustable_params_disp,
-        which="pbe",
-        name="pbe_generalized_8_12_dimers_and_clusters_adjust_disp",
-    )
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     dimer_stretch=True,
+    #     small_clusters=False,
+    #     adjustable_params=adjustable_params_disp,
+    #     which="pbe",
+    #     name="pbe_generalized_8_12_dimers_disp",
+    # )
+
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     dimer_stretch=True,
+    #     small_clusters=True,
+    #     adjustable_params=adjustable_params,
+    #     which="pbe",
+    #     name="pbe_generalized_8_12_dimers_and_clusters",
+    # )
+
+    # run_scme_fitting(
+    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
+    #     dimer_stretch=True,
+    #     small_clusters=True,
+    #     ice=True,
+    #     budget=0,
+    #     adjustable_params=adjustable_params_disp,
+    #     which="pbe",
+    #     name="pbe_generalized_8_12_dimers_and_clusters_and_ice_adjust_disp",
+    # )

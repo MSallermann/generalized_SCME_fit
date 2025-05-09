@@ -129,7 +129,7 @@ class SCMEObjectiveFunction:
 
     def check_water_is_in_OHH_order(
         self, atoms: Atoms, OH_distance_tol: float = 2.0
-    ) -> None:
+    ) -> bool:
         """
         Validate that each water molecule is ordered O, H, H and within tolerance.
 
@@ -149,6 +149,7 @@ class SCMEObjectiveFunction:
         if n_atoms % 3 != 0:
             raise ValueError("Total atoms not divisible by 3 for water molecules")
 
+        good = True
         for i in range(n_atoms // 3):
             idxO, idxH1, idxH2 = 3 * i, 3 * i + 1, 3 * i + 2
             if (
@@ -156,15 +157,20 @@ class SCMEObjectiveFunction:
                 or atoms.numbers[idxH1] != 1
                 or atoms.numbers[idxH2] != 1
             ):
-                raise ValueError(
-                    f"Atom types not OHH at indices {idxO},{idxH1},{idxH2}"
-                )
+                logger.warn(f"Atom types not OHH at indices {idxO},{idxH1},{idxH2}")
+                good = False
+                break
+
             d1 = atoms.get_distance(idxO, idxH1, mic=True)
             d2 = atoms.get_distance(idxO, idxH2, mic=True)
             if d1 > OH_distance_tol or d2 > OH_distance_tol:
-                raise ValueError(
+                logger.warn(
                     f"O-H distances {(d1, d2)} exceed tolerance {OH_distance_tol}"
                 )
+                good = False
+                break
+
+        return good
 
     def dump_test_configurations(self, path_to_folder: Path):
         """
@@ -179,10 +185,17 @@ class SCMEObjectiveFunction:
 
         path_to_folder.mkdir(exist_ok=True, parents=True)
 
+        filenames = []
         for i, atoms in enumerate(self.atoms_list):
-            write(path_to_folder / f"atoms_{i}_{self.tags[i]}.xyz", atoms)
+            name = f"atoms_{i}_{self.tags[i]}.xyz"
+            filenames.append(name)
+            write(path_to_folder / name, atoms)
 
-        df_data = {"tag": self.tags, "reference_energy": self.reference_energies}
+        df_data = {
+            "tag": self.tags,
+            "reference_energy": self.reference_energies,
+            "file": filenames,
+        }
 
         df = pd.DataFrame(df_data)
         df.to_csv(path_to_folder / "energies.csv")
@@ -206,8 +219,17 @@ class SCMEObjectiveFunction:
         """
         logger.debug(f"Loading configuration from {path_to_configuration}")
         atoms = read(path_to_configuration)
-        atoms = self.arange_water_in_OHH_order(atoms)
-        self.check_water_is_in_OHH_order(atoms)
+
+        # If the first check does not pass, we will try to fix the order of atoms
+        if not self.check_water_is_in_OHH_order(atoms):
+            logger.warn("Will try to fix atoms object order")
+            atoms = self.arange_water_in_OHH_order(atoms)
+
+        # If we are not able to fix the order of atoms we raise an exception
+        if not self.check_water_is_in_OHH_order(atoms):
+            logger.critical("Could not fix atoms object order")
+            raise ValueError("Atoms not in OHH order")
+
         scme_params = self.default_scme_params.copy()
         setup_calculator(
             atoms,
