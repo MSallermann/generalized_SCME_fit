@@ -1,6 +1,8 @@
 from scme_fitting.fitter import Fitter
 from scme_fitting.scme_setup import SCMEParams
-from scme_fitting.scme_fitter import SCMEObjectiveFunction
+from scme_fitting.scme_objective_function import SCMEObjectiveFunction
+from scme_fitting.combined_objective_function import CombinedObjectiveFunction
+
 import numpy as np
 import logging
 from pathlib import Path
@@ -31,27 +33,34 @@ def test_scme_fitting():
     # parametrization_key = "component_PBE_fullrange_reflect_8_12"
     parametrization_key = None
 
-    n_contributions = len(reference_energies)
+    scme_objective_functions = [
+        SCMEObjectiveFunction(
+            default_scme_params=SCMEParams(),
+            parametrization_key=parametrization_key,
+            path_to_reference_configuration=xyz_file,
+            reference_energy=energy,
+            divide_by_n_atoms=True,
+            tag=tag,
+        )
+        for xyz_file, energy, tag in zip(
+            paths_to_reference_configurations, reference_energies, tags
+        )
+    ]
+
+    objective_function = CombinedObjectiveFunction(
+        objective_functions=scme_objective_functions
+    )
 
     DEFAULT_PARAMS = SCMEParams()
     ADJUSTABLE_PARAMS = ["td", "Ar", "Br", "Cr", "r_Br"]
 
-    objective_function = SCMEObjectiveFunction(
-        default_scme_params=DEFAULT_PARAMS,
-        parametrization_key=parametrization_key,
-        paths_to_reference_configuration=paths_to_reference_configurations,
-        reference_energies=reference_energies,
-        tags=tags,
-    )
-
-    objective_function.dump_test_configurations("test_configurations_scme")
-
-    weights = np.array(range(n_contributions)) + 1
+    [
+        o.dump_test_configurations("test_configurations_scme")
+        for o in scme_objective_functions
+    ]
 
     fitter = Fitter(
-        objective_function_cb=objective_function,
-        n_contributions=n_contributions,
-        weights=weights,
+        objective_function=objective_function,
     )
 
     initial_params = {k: dict(DEFAULT_PARAMS)[k] for k in ADJUSTABLE_PARAMS}
@@ -60,24 +69,16 @@ def test_scme_fitting():
         initial_parameters=initial_params, tol=0, options=dict(maxiter=50, disp=True)
     )
 
-    optimal_params = fitter.fit_nevergrad(initial_parameters=initial_params, budget=100)
-
     print(f"{initial_params = }")
     print(f"{optimal_params = }")
 
     plt.plot(reference_energies, label="reference")
     plt.plot(
-        [
-            objective_function.get_energy(i, initial_params)
-            for i in range(n_contributions)
-        ],
+        [o.get_energy(initial_params) for o in scme_objective_functions],
         label="initial parameters",
     )
     plt.plot(
-        [
-            objective_function.get_energy(i, optimal_params)
-            for i in range(n_contributions)
-        ],
+        [o.get_energy(optimal_params) for o in scme_objective_functions],
         label="fitted parameters",
     )
     plt.legend()

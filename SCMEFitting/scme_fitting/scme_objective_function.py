@@ -39,7 +39,9 @@ class SCMEObjectiveFunction:
 
         self.reference_energy = reference_energy
 
-        self.atoms = self._create_list_of_atom_objects()
+        self.atoms = self.create_atoms_object_from_configuration(
+            path_to_reference_configuration
+        )
         self.weight_cb = weight_cb
 
     def dump_test_configurations(self, path_to_folder: Path):
@@ -55,7 +57,8 @@ class SCMEObjectiveFunction:
         meta_data = {
             "tag": self.tag,
             "reference_energy": self.reference_energy,
-            "file": self.paths_to_reference_configuration,
+            "original_file": str(self.paths_to_reference_configuration),
+            "saved_file": name,
             "n_atoms": len(self.atoms),
         }
 

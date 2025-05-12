@@ -190,7 +190,7 @@ def setup_calculator(
     return atoms.calc
 
 
-def arange_water_in_OHH_order(self, atoms: Atoms) -> Atoms:
+def arange_water_in_OHH_order(atoms: Atoms) -> Atoms:
     """
     Reorder atoms so each water molecule appears as O, H, H.
 

@@ -1,7 +1,7 @@
 import logging
 from typing import Callable
 import numpy as np
-from typing import Optional, Sequence, Dict
+from typing import Dict
 import time
 
 logger = logging.getLogger(__name__)
