@@ -69,12 +69,9 @@ class Fitter:
 
         Example
         -------
-        >>> def objective_function_cb(idx: int, params: dict):
-        ...     if idx == 0:
-        ...         return 2.0 * (params["x"] - 2) ** 2
-        ...     if idx == 1:
-        ...         return 3.0 * (params["y"] + 1) ** 2
-        >>> fitter = Fitter(objective_function_cb=objective_function_cb, n_contributions=2)
+        >>> def objective_function(idx: int, params: dict):
+        ...     return 2.0 * (params["x"] - 2) ** 2 + 3.0 * (params["y"] + 1) ** 2
+        >>> fitter = Fitter(objective_function=objective_function)
         >>> initial_params = dict(x=0.0, y=0.0)
         >>> optimal_params = fitter.fit_nevergrad(initial_parameters=initial_params, budget=100)
         >>> print(optimal_params)
@@ -126,12 +123,9 @@ class Fitter:
 
         Example
         -------
-        >>> def objective_function_cb(idx: int, params: dict):
-        ...     if idx == 0:
-        ...         return 2.0 * (params["x"] - 2) ** 2
-        ...     if idx == 1:
-        ...         return 3.0 * (params["y"] + 1) ** 2
-        >>> fitter = Fitter(objective_function_cb=objective_function_cb, n_contributions=2)
+        >>> def objective_function(idx: int, params: dict):
+        ...     return 2.0 * (params["x"] - 2) ** 2 + 3.0 * (params["y"] + 1) ** 2
+        >>> fitter = Fitter(objective_function=objective_function)
         >>> initial_params = dict(x=0.0, y=0.0)
         >>> optimal_params = fitter.fit_scipy(initial_parameters=initial_params)
         >>> print(optimal_params)
