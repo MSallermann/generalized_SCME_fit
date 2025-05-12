@@ -181,85 +181,101 @@ def create_obj_funcs_from_csv(
     return CombinedObjectiveFunction(obj_func_list)
 
 
+def combined_objective_functions_flat(
+    combined_objective_functions_list: list[CombinedObjectiveFunction],
+    weights: list[float],
+):
+    assert len(combined_objective_functions_list) == len(weights)
+
+    total_objective_functions = []
+    total_weights = []
+
+    for ob, w in zip(combined_objective_functions_list, weights):
+        total_objective_functions += ob.objective_functions
+        total_weights += [ob_w * w for ob_w in ob.weights]
+
+    return CombinedObjectiveFunction(total_objective_functions, total_weights)
+
+
 if __name__ == "__main__":
     logging.basicConfig(filename="fit_scme.log", level=logging.INFO)
 
     default_params = SCMEParams()
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
     adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    budget = 10
+    budget = 1000
 
+    # Construct objective functions
+    # dimer
     dimer_csv = Path("./pbe_reference_configs/dimer/energies.csv")
-
     dimer_objective_func = create_obj_funcs_from_csv(
         dimer_csv, default_params, parametrization_key
     )
+    dimer_objective_func.weights[0] *= 100000
 
-    name = "dimer_stretch"
+    # clusters
+    cluster_csv = Path("./pbe_reference_configs/clusters/energies.csv")
+    cluster_objective_func = create_obj_funcs_from_csv(
+        cluster_csv, default_params, parametrization_key
+    )
 
-    # Only optimize on the dimers
+    ##### DIMER only #####
+    # name = "dimer_only"
+
+    # optimal_params, initial_params = run_scme_fitting(
+    #     adjustable_params=adjustable_params,
+    #     default_params=default_params,
+    #     objective_function=dimer_objective_func,
+    #     budget=budget,
+    # )
+
+    # write_output(
+    #     name,
+    #     parametrization_key=parametrization_key,
+    #     objective_function=dimer_objective_func,
+    #     initial_params=initial_params,
+    #     optimal_params=optimal_params,
+    #     default_params=default_params,
+    # )
+
+    ##### Cluster only #####
+    # name = "cluster_only"
+
+    # optimal_params, initial_params = run_scme_fitting(
+    #     adjustable_params=adjustable_params,
+    #     default_params=default_params,
+    #     objective_function=cluster_objective_func,
+    #     budget=budget,
+    # )
+
+    # write_output(
+    #     name,
+    #     parametrization_key=parametrization_key,
+    #     objective_function=cluster_objective_func,
+    #     initial_params=initial_params,
+    #     optimal_params=optimal_params,
+    #     default_params=default_params,
+    # )
+
+    ##### Cluster + Dimer #####
+    name = "dimer_cluster"
+
+    dimer_cluster_obj_func = combined_objective_functions_flat(
+        [dimer_objective_func, cluster_objective_func], weights=[10.0, 1.0]
+    )
+
     optimal_params, initial_params = run_scme_fitting(
         adjustable_params=adjustable_params,
         default_params=default_params,
-        objective_function=dimer_objective_func,
+        objective_function=cluster_objective_func,
         budget=budget,
     )
 
     write_output(
         name,
         parametrization_key=parametrization_key,
-        objective_function=dimer_objective_func,
+        objective_function=dimer_cluster_obj_func,
         initial_params=initial_params,
         optimal_params=optimal_params,
         default_params=default_params,
     )
-
-    # adjustable_params = optimal_params
-
-    # # Only optimize on the clusters
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=False, clusters=True, ice=False
-    # )
-    # optimal_params = run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params,
-    #     budget=BUDGET,
-    #     name="generalized_cluster",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     # weights=weights,
-    # )
-    # adjustable_params = optimal_params
-
-    # # Optimize on the clusters + dimer
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=True, clusters=True, ice=False
-    # )
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params,
-    #     budget=BUDGET,
-    #     name="generalized_dimer_cluster",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     # weights=weights,
-    # )
-
-    # paths, tags, energies, weights = create_input_data(
-    #     functional="pbe", dimer=False, clusters=False, ice=True
-    # )
-    # run_scme_fitting(
-    #     parametrization_key="component_PBE_fullrange_reflect_8_12",
-    #     adjustable_params=adjustable_params_disp,
-    #     budget=10,
-    #     name="generalized_dimer_cluster_ice",
-    #     default_params=SCMEParams(),
-    #     paths=paths,
-    #     tags=tags,
-    #     energies=energies,
-    #     weights=weights,
-    # )
