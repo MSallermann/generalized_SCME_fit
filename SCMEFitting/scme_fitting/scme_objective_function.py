@@ -42,7 +42,20 @@ class SCMEObjectiveFunction:
         self.atoms = self.create_atoms_object_from_configuration(
             path_to_reference_configuration
         )
+
+        self.n_atoms = len(self.atoms)
+
         self.weight_cb = weight_cb
+
+        weight = 1.0
+        if self.divide_by_n_atoms:
+            n_atoms = len(self.atoms)
+            weight /= n_atoms
+
+        if self.weight_cb is not None:
+            weight *= self.weight_cb(self.atoms)
+
+        self.weight = weight
 
     def dump_test_configurations(self, path_to_folder: Path):
         """
@@ -161,18 +174,10 @@ class SCMEObjectiveFunction:
         energy = self.get_energy(parameters)
 
         target_energy = self.reference_energy
-        objective_function_contribution = (energy - target_energy) ** 2
-
-        weight = 1.0
-        if self.divide_by_n_atoms:
-            n_atoms = len(self.atoms)
-            weight /= n_atoms
-
-        if self.weight_cb is not None:
-            weight *= self.weight_cb(self.atoms)
+        objective_function_contribution = (energy - target_energy) ** 2 * self.weight
 
         logger.debug(f"Current params = {parameters}")
-        logger.debug(f"Current weight = {weight}")
+        logger.debug(f"Current weight = {self.weight}")
         logger.debug(f"Objective function value = {objective_function_contribution}")
 
         return objective_function_contribution
