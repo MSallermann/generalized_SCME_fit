@@ -65,7 +65,10 @@ def run_scme_fitting(
         weights=weights,
     )
 
-    initial_params = {k: dict(default_params)[k] for k in adjustable_params}
+    try:
+        initial_params = {k: v for k, v in adjustable_params.items()}
+    except:
+        initial_params = {k: dict(default_params)[k] for k in adjustable_params}
 
     optimal_params = fitter.fit_scipy(
         initial_parameters=initial_params,
@@ -131,6 +134,8 @@ def run_scme_fitting(
     fig.tight_layout()
     fig.savefig(output_folder / "plot.png", dpi=300)
 
+    return optimal_params
+
 
 def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
     def process_csv(path_to_csv: Path):
@@ -186,16 +191,16 @@ def create_input_data(functional: str, dimer: bool, clusters: bool, ice: bool):
 if __name__ == "__main__":
     logging.basicConfig(filename="fit_scme.log", level=logging.INFO)
 
-    adjustable_params_disp = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    BUDGET = 500
+    adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
+    BUDGET = 200
 
     # Only optimize on the dimers
     paths, tags, energies, weights = create_input_data(
         functional="pbe", dimer=True, clusters=False, ice=False
     )
-    run_scme_fitting(
+    optimal_params = run_scme_fitting(
         parametrization_key="component_PBE_fullrange_reflect_8_12",
-        adjustable_params=adjustable_params_disp,
+        adjustable_params=adjustable_params,
         budget=BUDGET,
         name="generalized_dimer",
         default_params=SCMEParams(),
@@ -204,14 +209,15 @@ if __name__ == "__main__":
         energies=energies,
         weights=weights,
     )
+    adjustable_params = optimal_params
 
     # Only optimize on the clusters
     paths, tags, energies, weights = create_input_data(
         functional="pbe", dimer=False, clusters=True, ice=False
     )
-    run_scme_fitting(
+    optimal_params = run_scme_fitting(
         parametrization_key="component_PBE_fullrange_reflect_8_12",
-        adjustable_params=adjustable_params_disp,
+        adjustable_params=adjustable_params,
         budget=BUDGET,
         name="generalized_cluster",
         default_params=SCMEParams(),
@@ -220,6 +226,7 @@ if __name__ == "__main__":
         energies=energies,
         weights=weights,
     )
+    adjustable_params = optimal_params
 
     # Optimize on the clusters + dimer
     paths, tags, energies, weights = create_input_data(
@@ -227,7 +234,7 @@ if __name__ == "__main__":
     )
     run_scme_fitting(
         parametrization_key="component_PBE_fullrange_reflect_8_12",
-        adjustable_params=adjustable_params_disp,
+        adjustable_params=adjustable_params,
         budget=BUDGET,
         name="generalized_dimer_cluster",
         default_params=SCMEParams(),
