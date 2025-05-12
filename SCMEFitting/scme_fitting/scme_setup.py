@@ -12,7 +12,10 @@ import numpy as np
 from ase.constraints import FixBondLengths
 import logging
 from pydantic import BaseModel
-from typing import Optional
+from ase.geometry import find_mic
+
+from typing import Optional, List
+
 
 # SCME_COMMIT = "274aa6fa4881bcb662d12a8c80488fa103a55fd2"
 # assert pyscme.version.commit() == SCME_COMMIT
@@ -185,3 +188,87 @@ def setup_calculator(
         )
 
     return atoms.calc
+
+
+def arange_water_in_OHH_order(self, atoms: Atoms) -> Atoms:
+    """
+    Reorder atoms so each water molecule appears as O, H, H.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        Original Atoms object containing water molecules.
+
+    Returns
+    -------
+    Atoms
+        New Atoms object with OHH ordering and no constraints.
+
+    Raises
+    ------
+    ValueError
+        If atom counts or ratios are inconsistent with water.
+    """
+    n_atoms = len(atoms)
+    if n_atoms % 3 != 0:
+        raise ValueError(f"Number of atoms {n_atoms} is not a multiple of 3")
+
+    mask_O = atoms.numbers == 8
+    mask_H = atoms.numbers == 1
+    if 2 * mask_O.sum() != mask_H.sum():
+        raise ValueError("Mismatch between O and H counts for water molecules")
+
+    new_order: List[Atoms] = []
+    for atom_O in atoms[mask_O]:
+        new_order.append(atom_O)
+        H_sorted = sorted(
+            atoms[mask_H],
+            key=lambda a: find_mic(atom_O.position - a.position, cell=atoms.cell)[1],
+        )
+        new_order.extend(H_sorted[:2])
+
+    result = atoms.copy()
+    result.set_constraint()
+    result.set_atomic_numbers([a.number for a in new_order])
+    result.set_positions([a.position for a in new_order])
+    return result
+
+
+def check_water_is_in_OHH_order(atoms: Atoms, OH_distance_tol: float = 2.0) -> bool:
+    """
+    Validate that each water molecule is ordered O, H, H and within tolerance.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        Atoms object to validate.
+    OH_distance_tol : float, optional
+        Maximum allowed O-H distance (default is 2.0 Å).
+
+    Raises
+    ------
+    ValueError
+        If ordering or distances violate water OHH assumptions.
+    """
+    n_atoms = len(atoms)
+    if n_atoms % 3 != 0:
+        raise ValueError("Total atoms not divisible by 3 for water molecules")
+
+    good = True
+    for i in range(n_atoms // 3):
+        idxO, idxH1, idxH2 = 3 * i, 3 * i + 1, 3 * i + 2
+        if (
+            atoms.numbers[idxO] != 8
+            or atoms.numbers[idxH1] != 1
+            or atoms.numbers[idxH2] != 1
+        ):
+            good = False
+            break
+
+        d1 = atoms.get_distance(idxO, idxH1, mic=True)
+        d2 = atoms.get_distance(idxO, idxH2, mic=True)
+        if d1 > OH_distance_tol or d2 > OH_distance_tol:
+            good = False
+            break
+
+    return good
