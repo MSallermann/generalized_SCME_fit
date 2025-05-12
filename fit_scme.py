@@ -34,6 +34,7 @@ def run_scme_fitting(
     default_params: SCMEParams,
     objective_function: Callable,
     budget: int,
+    plot_path: Optional[Path] = Path("./progress.png"),
 ):
     fitter = Fitter(
         objective_function=objective_function,
@@ -44,13 +45,27 @@ def run_scme_fitting(
     except:
         initial_params = {k: dict(default_params)[k] for k in adjustable_params}
 
+    progress = []
+
+    def callback(intermediate_result):
+        progress.append(intermediate_result.fun)
+
+    progress = []
+
     optimal_params = fitter.fit_scipy(
         initial_parameters=initial_params,
         tol=0,
         options=dict(maxiter=budget, disp=True),
+        callback=callback,
     )
 
-    return optimal_params, initial_params
+    if plot_path is not None:
+        plt.close()
+        plt.plot(progress)
+        plt.yscale("log")
+        plt.savefig(plot_path)
+
+    return optimal_params, initial_params, progress
 
 
 def make_plots(
@@ -203,7 +218,7 @@ if __name__ == "__main__":
     default_params = SCMEParams()
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
     adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    budget = 1000
+    budget = 500
 
     # Construct objective functions
     # dimer
@@ -211,7 +226,9 @@ if __name__ == "__main__":
     dimer_objective_func = create_obj_funcs_from_csv(
         dimer_csv, default_params, parametrization_key
     )
-    dimer_objective_func.weights[0] *= 100000
+    dimer_objective_func.weights[-1] = (
+        0.0  # We exclude the very last point because it's weird
+    )
 
     # clusters
     cluster_csv = Path("./pbe_reference_configs/clusters/energies.csv")
@@ -219,14 +236,20 @@ if __name__ == "__main__":
         cluster_csv, default_params, parametrization_key
     )
 
+    ice_csv = Path("./pbe_reference_configs/ice/energies.csv")
+    ice_objective_func = create_obj_funcs_from_csv(
+        cluster_csv, default_params, parametrization_key
+    )
+
     ##### DIMER only #####
     # name = "dimer_only"
 
-    # optimal_params, initial_params = run_scme_fitting(
+    # optimal_params, initial_params, progress = run_scme_fitting(
     #     adjustable_params=adjustable_params,
     #     default_params=default_params,
     #     objective_function=dimer_objective_func,
     #     budget=budget,
+    #     plot_path=f"progress_{name}.png"
     # )
 
     # write_output(
@@ -238,14 +261,15 @@ if __name__ == "__main__":
     #     default_params=default_params,
     # )
 
-    ##### Cluster only #####
+    # ##### Cluster only #####
     # name = "cluster_only"
 
-    # optimal_params, initial_params = run_scme_fitting(
+    # optimal_params, initial_params, progress = run_scme_fitting(
     #     adjustable_params=adjustable_params,
     #     default_params=default_params,
     #     objective_function=cluster_objective_func,
     #     budget=budget,
+    #     plot_path=f"progress_{name}.png"
     # )
 
     # write_output(
@@ -258,23 +282,50 @@ if __name__ == "__main__":
     # )
 
     ##### Cluster + Dimer #####
-    name = "dimer_cluster"
+    # name = "dimer_cluster"
 
-    dimer_cluster_obj_func = combined_objective_functions_flat(
-        [dimer_objective_func, cluster_objective_func], weights=[10.0, 1.0]
+    # dimer_cluster_obj_func = combined_objective_functions_flat(
+    #     [dimer_objective_func, cluster_objective_func], weights=[1.0, 0.5]
+    # )
+
+    # optimal_params, initial_params, progress = run_scme_fitting(
+    #     adjustable_params=adjustable_params,
+    #     default_params=default_params,
+    #     objective_function=dimer_cluster_obj_func,
+    #     budget=budget,
+    #     plot_path=f"progress_{name}.png",
+    # )
+
+    # write_output(
+    #     name,
+    #     parametrization_key=parametrization_key,
+    #     objective_function=dimer_cluster_obj_func,
+    #     initial_params=initial_params,
+    #     optimal_params=optimal_params,
+    #     default_params=default_params,
+    # )
+
+    ##### Cluster + Dimer + Ice#####
+
+    name = "dimer_cluster_ice"
+
+    dimer_cluster_ice_obj_func = combined_objective_functions_flat(
+        [dimer_objective_func, cluster_objective_func, ice_objective_func],
+        weights=[1.0, 0.5, 0.1],
     )
 
-    optimal_params, initial_params = run_scme_fitting(
+    optimal_params, initial_params, progress = run_scme_fitting(
         adjustable_params=adjustable_params,
         default_params=default_params,
-        objective_function=cluster_objective_func,
+        objective_function=dimer_cluster_ice_obj_func,
         budget=budget,
+        plot_path=f"progress_{name}.png",
     )
 
     write_output(
         name,
         parametrization_key=parametrization_key,
-        objective_function=dimer_cluster_obj_func,
+        objective_function=dimer_cluster_ice_obj_func,
         initial_params=initial_params,
         optimal_params=optimal_params,
         default_params=default_params,

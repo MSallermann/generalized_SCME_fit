@@ -149,6 +149,7 @@ class Fitter:
             return self.objective_function(p)
 
         res = minimize(f_scipy, x0, **kwargs)
+
         if not res.success:
             logger.warning("Fit did not converge: %s", res.message)
 
