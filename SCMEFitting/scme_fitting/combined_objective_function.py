@@ -11,6 +11,8 @@ class CombinedObjectiveFunction:
 
         if weights is None:
             self.weights = [1.0 for ob in self.objective_functions]
+        else:
+            self.weights = weights
 
         assert len(self.weights) == len(self.objective_functions)
 
