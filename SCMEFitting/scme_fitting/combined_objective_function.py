@@ -1,0 +1,24 @@
+from typing import Any, List, Dict, Callable, Optional
+
+
+class CombinedObjectiveFunction:
+    def __init__(
+        self,
+        objective_functions: List[Callable[[Dict[str, float]], float]],
+        weights: Optional[List[float]] = None,
+    ):
+        self.objective_functions = objective_functions
+
+        if weights is None:
+            self.weights = [1.0 for ob in self.objective_functions]
+
+        assert len(self.weights) == len(self.objective_functions)
+
+    def __call__(self, params: Dict[str, float]) -> Any:
+        result = 0
+        for i, w in enumerate(self.weights):
+            # We make a copy of params here, just in case the objective function modifies it
+            p = params.copy()
+            result += self.objective_functions[i](p) * w
+
+        return result

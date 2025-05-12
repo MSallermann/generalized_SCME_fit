@@ -19,78 +19,33 @@ class Fitter:
 
     def __init__(
         self,
-        objective_function_cb: Callable[[int, Dict[str, float]], float],
-        n_contributions: int,
-        weights: Optional[Sequence[float]] = None,
+        objective_function: Callable[[Dict[str, float]], float],
     ):
         """
         Initialize a Fitter instance.
 
         Parameters
         ----------
-        objective_function_cb : Callable[[int, Dict[str, float]], float]
-            A callback function that, given an integer index and a parameter dict,
-            returns a float contribution to the objective.
-        n_contributions : int
-            The number of contributions the callback will be called for.
-        weights : Sequence[float], optional
-            An optional sequence of weights for each contribution. If None,
-            all contributions are weighted equally.
-
-        Raises
-        ------
-        AssertionError
-            If provided weights do not match the number of contributions.
+        objective_function : Callable[[Dict[str, float]], float]
+            A callback function that, given a parameter dict,
+            returns a float which is the value of the objective function to be minimized.
         """
 
-        self.obj_cb = objective_function_cb
-        self.n_contrib = n_contributions
-        self.weights = (
-            np.ones(n_contributions) if weights is None else np.array(weights)
-        )
-        assert self.weights.shape == (n_contributions,)
+        self.objective_function = objective_function
         self._keys: list[str] = []
-
-    def compute_total(self, params: Dict[str, float]) -> float:
-        """
-        Compute the weighted sum of contributions from the objective callback.
-
-        Parameters
-        ----------
-        params : Dict[str, float]
-            Dictionary mapping parameter names to their current float values.
-
-        Returns
-        -------
-        float
-            The total weighted objective value.
-
-        Notes
-        -----
-        A copy of the params dict is passed to each callback invocation to
-        prevent unintended side effects if the callback mutates its input.
-        """
-
-        result = 0
-        for i, w in enumerate(self.weights):
-            # We make a copy of params here, just in case the objective function modifies it
-            p = params.copy()
-            result += self.obj_cb(i, p) * w
-
-        return result
 
     def hook_pre_fit(self, initial_parameters: Dict):
         self.time_fit_start = time.time()
 
         logger.info(f"Start fitting with initial parameters {initial_parameters}")
         logger.info(
-            f"Initial objective function {self.compute_total(initial_parameters)}"
+            f"Initial objective function {self.objective_function(initial_parameters)}"
         )
 
     def hook_post_fit(self, opt_params: Dict):
         self.time_fit_end = time.time()
 
-        logger.info(f"Final objective function {self.compute_total(opt_params)}")
+        logger.info(f"Final objective function {self.objective_function(opt_params)}")
         logger.info(f"Optimal parameters {opt_params}")
         logger.info(f"Time taken {self.time_fit_end - self.time_fit_start} seconds")
 
@@ -137,7 +92,9 @@ class Fitter:
 
         optimizer = ng.optimizers.NgIohTuned(parametrization=instru, budget=budget)
 
-        recommendation = optimizer.minimize(self.compute_total, **kwargs)  # best value
+        recommendation = optimizer.minimize(
+            self.objective_function, **kwargs
+        )  # best value
         args, kwargs = recommendation.value
 
         # Our optimal params are the first positional argument
@@ -195,7 +152,7 @@ class Fitter:
         # put a parameters in a dictionary based on the captured keys
         def f_scipy(x):
             p = dict(zip(self._keys, x))
-            return self.compute_total(p)
+            return self.objective_function(p)
 
         res = minimize(f_scipy, x0, **kwargs)
         if not res.success:
