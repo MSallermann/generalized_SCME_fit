@@ -117,6 +117,9 @@ def write_output(
 
     objective_function_list = objective_function.objective_functions
 
+    for o in objective_function_list:
+        o.dump_test_configuration(output_folder / "reference_configs")
+
     weights_energy = [ob.weight for ob in objective_function_list]
     weights_combination = objective_function.weights
     ob_value = [ob(optimal_params) for ob in objective_function_list]
@@ -184,7 +187,7 @@ if __name__ == "__main__":
     default_params = SCMEParams()
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
     adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    budget = 200
+    budget = 10
 
     dimer_csv = Path("./pbe_reference_configs/dimer/energies.csv")
 

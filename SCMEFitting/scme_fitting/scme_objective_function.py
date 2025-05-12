@@ -57,7 +57,7 @@ class SCMEObjectiveFunction:
 
         self.weight = weight
 
-    def dump_test_configurations(self, path_to_folder: Path):
+    def dump_test_configuration(self, path_to_folder: Path):
         """
         Write reference configurations and energies to disk for inspection.
         """
@@ -73,6 +73,7 @@ class SCMEObjectiveFunction:
             "original_file": str(self.paths_to_reference_configuration),
             "saved_file": name,
             "n_atoms": len(self.atoms),
+            "weight": self.weight,
         }
 
         with open(path_to_folder / f"meta_{self.tag}.json", "w") as f:
