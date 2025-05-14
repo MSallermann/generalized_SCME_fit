@@ -7,7 +7,6 @@ from pint import UnitRegistry, Quantity
 from typing import Tuple, List
 
 ureg = UnitRegistry()
-logging.basicConfig(filename="fitting.log", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 

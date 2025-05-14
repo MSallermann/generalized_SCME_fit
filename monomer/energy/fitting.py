@@ -20,7 +20,6 @@ from util import (
 
 # Initialize logging and units
 ureg = UnitRegistry()
-logging.basicConfig(filename="fitting.log", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -215,6 +214,13 @@ def train(
         geometries_test[:, 2],
         **params_jax,
     )
+
+    mean_error_test = np.mean(y_pred_test - energies_test)
+    mean_error_train = np.mean(y_pred_train - energies_train)
+
+    logger.info(f"{mean_error_test = }")
+    logger.info(f"{mean_error_train = }")
+
     # Generate scatter plots
     plot_scatter(
         energies_train,
@@ -252,10 +258,27 @@ def train(
     return trained_params
 
 
+# Convert to atomic units
+def convert_to_atomic_units(q: Quantity) -> Quantity:
+    for u in [
+        ureg.hartree,
+        ureg.bohr,
+        1.0 / ureg.bohr,
+        1.0 / ureg.bohr**2,
+        ureg.radian,
+    ]:
+        if q.is_compatible_with(u):
+            return q.to(u)
+    logger.warning(f"Could not convert {q} to atomic units")
+    return q
+
+
 # ------------------------------------------------------------------------------
 # Standalone execution: mirrors original script behavior
 # ------------------------------------------------------------------------------
 if __name__ == "__main__":
+    logging.basicConfig(filename="fitting.log", level=logging.INFO)
+
     # File paths
     FILE_PATH = Path(__file__).parent
     INPUT_FILE = FILE_PATH / "input/fitted_energies.hdf5"
@@ -322,20 +345,6 @@ if __name__ == "__main__":
         exponent_sum_max=cfg["exponent_sum_max"],
         skip_zero=cfg["skip_zero"],
     )
-
-    # Convert to atomic units
-    def convert_to_atomic_units(q: Quantity) -> Quantity:
-        for u in [
-            ureg.hartree,
-            ureg.bohr,
-            1.0 / ureg.bohr,
-            1.0 / ureg.bohr**2,
-            ureg.radian,
-        ]:
-            if q.is_compatible_with(u):
-                return q.to(u)
-        logger.warning(f"Could not convert {q} to atomic units")
-        return q
 
     atomic = {k: convert_to_atomic_units(v) for k, v in trained.items()}
     write_params_to_file(
