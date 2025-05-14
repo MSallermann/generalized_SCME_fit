@@ -89,7 +89,7 @@ def make_plots(
     ax.plot(tags, energy_initial / n_atoms, marker=".", label="initial")
     ax.set_xticks(range(len(energy_reference)))
     ax.set_xticklabels(tags, rotation=90)
-    ax.set_ylabel("energy [meV] / n_atoms")
+    ax.set_ylabel("energy [eV] / n_atoms")
     ax.legend()
     fig.tight_layout()
     fig.savefig(output_folder / "plot_energy.png", dpi=300)
@@ -226,6 +226,8 @@ if __name__ == "__main__":
     dimer_objective_func = create_obj_funcs_from_csv(
         dimer_csv, default_params, parametrization_key
     )
+    dimer_objective_func.weights[0] *= 10
+    dimer_objective_func.weights[1] *= 10
     dimer_objective_func.weights[-1] = (
         0.0  # We exclude the very last point because it's weird
     )
@@ -236,9 +238,18 @@ if __name__ == "__main__":
         cluster_csv, default_params, parametrization_key
     )
 
+    # ice
     ice_csv = Path("./pbe_reference_configs/ice/energies.csv")
-    ice_objective_func = create_obj_funcs_from_csv(
-        cluster_csv, default_params, parametrization_key
+    __ice_objective_func = create_obj_funcs_from_csv(
+        ice_csv, default_params, parametrization_key
+    )
+
+    # Let's only take the smallest and the largest ice
+    ice_objective_func = CombinedObjectiveFunction(
+        [
+            __ice_objective_func.objective_functions[0],
+            __ice_objective_func.objective_functions[-1],
+        ]
     )
 
     ##### DIMER only #####
@@ -305,7 +316,7 @@ if __name__ == "__main__":
     #     default_params=default_params,
     # )
 
-    ##### Cluster + Dimer + Ice#####
+    ##### Cluster + Dimer + Ice #####
 
     name = "dimer_cluster_ice"
 
@@ -318,7 +329,7 @@ if __name__ == "__main__":
         adjustable_params=adjustable_params,
         default_params=default_params,
         objective_function=dimer_cluster_ice_obj_func,
-        budget=budget,
+        budget=500,
         plot_path=f"progress_{name}.png",
     )
 
