@@ -128,8 +128,11 @@ class SCMEParams(BaseModel):
     NC: list[int] = [0, 0, 0]
 
 
-def setup_expansions(calc: SCMECalculator, parametrization_key: str):
-    file = __FOLDER__ / "resources/scme_expansions.hdf5"
+def setup_expansions(
+    calc: SCMECalculator, parametrization_key: str, path_to_scme_expansions: Path
+):
+    file = Path(path_to_scme_expansions)
+    assert file.exists()
 
     logging.debug("Setting up expansions")
     logging.debug(f"    {parametrization_key = }")
@@ -175,8 +178,9 @@ DEFAULT_PARAMS = SCMEParams()
 
 def setup_calculator(
     atoms: Atoms,
-    scme_params: SCMEParams = DEFAULT_PARAMS,
-    parametrization_key: Optional[str] = "component_PBE_fullrange_reflect_6_9",
+    scme_params: SCMEParams,
+    path_to_scme_expansions: Path,
+    parametrization_key: str,
 ) -> SCMECalculator:
     atoms.calc = SCMECalculator(atoms, **dict(scme_params))
     parameter_H2O.Assign_parameters_H20(atoms.calc.scme)
@@ -185,6 +189,7 @@ def setup_calculator(
         setup_expansions(
             atoms.calc,
             parametrization_key=parametrization_key,
+            path_to_scme_expansions=path_to_scme_expansions,
         )
 
     return atoms.calc

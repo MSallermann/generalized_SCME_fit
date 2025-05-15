@@ -20,6 +20,7 @@ class SCMEObjectiveFunction:
         self,
         default_scme_params: SCMEParams,
         parametrization_key: str,
+        path_to_scme_expansions: Path,
         path_to_reference_configuration: Path,
         reference_energy: float,
         divide_by_n_atoms: bool = False,
@@ -34,6 +35,7 @@ class SCMEObjectiveFunction:
             self.tag = tag
 
         self.default_scme_params: SCMEParams = default_scme_params
+        self.path_to_scme_expansions: Path = path_to_scme_expansions
         self.parametrization_key: str = parametrization_key
         self.paths_to_reference_configuration = path_to_reference_configuration
 
@@ -114,6 +116,7 @@ class SCMEObjectiveFunction:
             atoms,
             scme_params=scme_params,
             parametrization_key=self.parametrization_key,
+            path_to_scme_expansions=self.path_to_scme_expansions,
         )
         return atoms
 
