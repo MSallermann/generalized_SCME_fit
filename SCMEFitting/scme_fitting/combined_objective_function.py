@@ -16,6 +16,11 @@ class CombinedObjectiveFunction:
 
         assert len(self.weights) == len(self.objective_functions)
 
+    def add(self, obj_func: float, weight: float = 1.0):
+        self.objective_functions.append(obj_func)
+        self.weights.append(weight)
+        return self
+
     def __call__(self, params: Dict[str, float]) -> Any:
         result = 0
         for i, w in enumerate(self.weights):
