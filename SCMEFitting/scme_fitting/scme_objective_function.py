@@ -59,17 +59,9 @@ class SCMEObjectiveFunction:
 
         self.weight = weight
 
-    def dump_test_configuration(self, path_to_folder: Path):
-        """
-        Write reference configurations and energies to disk for inspection.
-        """
-        path_to_folder = Path(path_to_folder)
-        path_to_folder.mkdir(exist_ok=True, parents=True)
-
+    def get_meta_data(self):
         name = f"atoms_{self.tag}.xyz"
-        write(path_to_folder / name, self.atoms)
-
-        meta_data = {
+        return {
             "tag": self.tag,
             "reference_energy": self.reference_energy,
             "original_file": str(self.paths_to_reference_configuration),
@@ -77,6 +69,17 @@ class SCMEObjectiveFunction:
             "n_atoms": len(self.atoms),
             "weight": self.weight,
         }
+
+    def dump_test_configuration(self, path_to_folder: Path):
+        """
+        Write reference configurations and energies to disk for inspection.
+        """
+        path_to_folder = Path(path_to_folder)
+        path_to_folder.mkdir(exist_ok=True, parents=True)
+
+        meta_data = self.get_meta_data()
+        name = meta_data["saved_file"]
+        write(path_to_folder / name, self.atoms)
 
         with open(path_to_folder / f"meta_{self.tag}.json", "w") as f:
             json.dump(meta_data, f, indent=4)
@@ -120,6 +123,15 @@ class SCMEObjectiveFunction:
         )
         return atoms
 
+    def apply_parameters(self, parameters: Dict[str, float]):
+        for key, value in parameters.items():
+            if hasattr(self.atoms.calc.scme, key):
+                setattr(self.atoms.calc.scme, key, value)
+            else:
+                raise KeyError(
+                    f"There was a key in the parameters dict, which cannot be set on the scmecpp.Potential object. The offending key was {key}"
+                )
+
     def get_energy(self, parameters: Dict[str, float]) -> float:
         """
         Compute SCME energy for configuration `idx` with `parameters` applied.
@@ -135,20 +147,9 @@ class SCMEObjectiveFunction:
         -------
         float
             Potential energy from the ASE Atoms object.
-
-        Raises
-        ------
-        KeyError
-            If required parameters are missing.
         """
 
-        for key, value in parameters.items():
-            if hasattr(self.atoms.calc.scme, key):
-                setattr(self.atoms.calc.scme, key, value)
-            else:
-                raise KeyError(
-                    f"There was a key in the parameters dict, which cannot be set on the scmecpp.Potential object. The offending key was {key}"
-                )
+        self.apply_parameters(parameters)
 
         # We have to make sure to trigger the update of the energy manually,
         # because ase will think it can use the cached energy values,
@@ -161,7 +162,7 @@ class SCMEObjectiveFunction:
 
     def __call__(self, parameters: dict):
         """
-        Compute squared-error contribution for configuration `idx`.
+        Compute squared-error contribution to the objective function.
 
         Parameters
         ----------
