@@ -9,6 +9,7 @@ from ase.io import read, write
 from typing import Optional, Dict, Callable
 from pathlib import Path
 import json
+import abc
 
 import logging
 
@@ -22,13 +23,10 @@ class SCMEObjectiveFunction:
         parametrization_key: str,
         path_to_scme_expansions: Path,
         path_to_reference_configuration: Path,
-        reference_energy: float,
-        divide_by_n_atoms: bool = False,
         tag: Optional[str] = None,
+        weight: float = 1.0,
         weight_cb: Optional[Callable[[Atoms], float]] = None,
     ):
-        self.divide_by_n_atoms = divide_by_n_atoms
-
         if tag is None:
             self.tag = "tag_None"
         else:
@@ -39,8 +37,6 @@ class SCMEObjectiveFunction:
         self.parametrization_key: str = parametrization_key
         self.paths_to_reference_configuration = path_to_reference_configuration
 
-        self.reference_energy = reference_energy
-
         self.atoms = self.create_atoms_object_from_configuration(
             path_to_reference_configuration
         )
@@ -48,11 +44,6 @@ class SCMEObjectiveFunction:
         self.n_atoms = len(self.atoms)
 
         self.weight_cb = weight_cb
-
-        weight = 1.0
-        if self.divide_by_n_atoms:
-            n_atoms = len(self.atoms)
-            weight /= n_atoms
 
         if self.weight_cb is not None:
             weight *= self.weight_cb(self.atoms)
@@ -63,7 +54,6 @@ class SCMEObjectiveFunction:
         name = f"atoms_{self.tag}.xyz"
         return {
             "tag": self.tag,
-            "reference_energy": self.reference_energy,
             "original_file": str(self.paths_to_reference_configuration),
             "saved_file": name,
             "n_atoms": len(self.atoms),
@@ -160,9 +150,10 @@ class SCMEObjectiveFunction:
         logger.debug(f"Calculated energy (tag = {self.tag}): {energy}")
         return energy
 
-    def __call__(self, parameters: dict):
+    @abc.abstractmethod
+    def __call__(self, parameters: dict) -> float:
         """
-        Compute squared-error contribution to the objective function.
+        The implementation of the contribution to the objective function
 
         Parameters
         ----------
@@ -173,16 +164,6 @@ class SCMEObjectiveFunction:
         Returns
         -------
         float
-            Squared difference between computed and reference energy.
+            objective function value
         """
-
-        energy = self.get_energy(parameters)
-
-        target_energy = self.reference_energy
-        objective_function_contribution = (energy - target_energy) ** 2 * self.weight
-
-        logger.debug(f"Current params = {parameters}")
-        logger.debug(f"Current weight = {self.weight}")
-        logger.debug(f"Objective function value = {objective_function_contribution}")
-
-        return objective_function_contribution
+        ...

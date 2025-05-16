@@ -1,6 +1,11 @@
 from scme_fitting.fitter import Fitter
 from scme_fitting.scme_setup import SCMEParams
-from scme_fitting.scme_objective_function import SCMEObjectiveFunction
+
+from scme_fitting.scme_energy_objective_function import SCMEEnergyObjectiveFunction
+from scme_fitting.dimer_distance_objective_function import (
+    DimerDistanceObjectiveFunction,
+)
+
 from scme_fitting.combined_objective_function import CombinedObjectiveFunction
 
 
@@ -50,14 +55,17 @@ def run_scme_fitting(
     def callback(intermediate_result):
         progress.append(intermediate_result.fun)
 
-    progress = []
-
     optimal_params = fitter.fit_scipy(
         initial_parameters=initial_params,
-        tol=0,
+        tol=1e-2,
+        method="Nelder-Mead",
         options=dict(maxiter=budget, disp=True),
         callback=callback,
     )
+
+    # optimal_params = fitter.fit_nevergrad(
+    #     initial_parameters=initial_params, budget=budget
+    # )
 
     if plot_path is not None:
         plt.close()
@@ -190,7 +198,7 @@ def create_obj_funcs_from_csv(
     paths, tags, energies = process_csv(path_to_csv)
 
     obj_func_list = [
-        SCMEObjectiveFunction(
+        SCMEEnergyObjectiveFunction(
             default_scme_params=default_params,
             parametrization_key=parametrization_key,
             path_to_scme_expansions=path_to_scme_expansions,
@@ -229,8 +237,8 @@ if __name__ == "__main__":
     path_to_scme_expansions = Path("./input/scme_expansions_PBE.hdf5")
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
 
-    adjustable_params = ["te", "td", "Ar", "Br", "Cr", "r_Br", "C6", "C8", "C10"]
-    budget = 10
+    adjustable_params = ["te", "td", "Ar", "Br", "Cr", "C6", "C8", "C10"]
+    budget = 2
 
     # Construct objective functions
     # dimer
@@ -245,6 +253,22 @@ if __name__ == "__main__":
     dimer_objective_func.weights[1] *= 10
     dimer_objective_func.weights[-1] = (
         0.0  # We exclude the very last point because it's weird
+    )
+
+    path_initial_dimer = Path("./pbe_reference_configs/dimer/atoms_6_dimer_C1_3.0.xyz")
+    dimer_distance_func = DimerDistanceObjectiveFunction(
+        default_scme_params=default_params,
+        parametrization_key=parametrization_key,
+        path_to_scme_expansions=path_to_scme_expansions,
+        path_to_reference_configuration=path_initial_dimer,
+        tag="dimer_OO_relaxation",
+        OO_distance_target=2.9,
+        fmax=4e-4,
+    )
+
+    dimer_objective_func.add(
+        dimer_distance_func,
+        weight=1000,
     )
 
     # clusters
@@ -274,7 +298,7 @@ if __name__ == "__main__":
     )
 
     ##### DIMER only #####
-    name = "dimer_only"
+    name = "dimer_only_pbe"
 
     optimal_params, initial_params, progress = run_scme_fitting(
         adjustable_params=adjustable_params,
