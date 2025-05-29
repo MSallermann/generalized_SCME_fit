@@ -16,6 +16,9 @@ class CombinedObjectiveFunction:
 
         assert len(self.weights) == len(self.objective_functions)
 
+    def n_terms(self):
+        return len(self.weights)
+
     def add(self, obj_func: float, weight: float = 1.0):
         self.objective_functions.append(obj_func)
         self.weights.append(weight)
