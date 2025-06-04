@@ -77,8 +77,7 @@ def run_scme_fitting(
 
 
 def make_plots(
-    output_folder: Path,
-    energies_scme_df: pd.DataFrame,
+    output_folder: Path, energies_scme_df: pd.DataFrame, plot_initial: bool = True
 ):
     tags = energies_scme_df["tag"]
     energy_initial = energies_scme_df["energy_initial"]
@@ -94,7 +93,8 @@ def make_plots(
         tags, energy_reference / n_atoms, marker="o", color="black", label="reference"
     )
     ax.plot(tags, energy_fitted / n_atoms, marker="x", label="fitted")
-    ax.plot(tags, energy_initial / n_atoms, marker=".", label="initial")
+    if plot_initial:
+        ax.plot(tags, energy_initial / n_atoms, marker=".", label="initial")
     ax.set_xticks(range(len(energy_reference)))
     ax.set_xticklabels(tags, rotation=90)
     ax.set_ylabel("energy [eV] / n_atoms")
@@ -237,8 +237,23 @@ if __name__ == "__main__":
     path_to_scme_expansions = Path("./input/scme_expansions_PBE.hdf5")
     parametrization_key = "component_PBE_fullrange_reflect_8_12"
 
-    adjustable_params = ["te", "td", "Ar", "Br", "Cr", "C6", "C8", "C10"]
-    budget = 1000
+    adjustable_params = [
+        "te",
+        "td",
+        "Ar_OO",
+        "Ar_OH",
+        "Ar_HH",
+        "Br_OO",
+        "Br_OH",
+        "Br_HH",
+        "Cr_OO",
+        "Cr_OH",
+        "Cr_HH",
+        "C6",
+        "C8",
+        "C10",
+    ]
+    budget = 5000
 
     # Construct objective functions
     # dimer
@@ -258,7 +273,7 @@ if __name__ == "__main__":
     # dimer_objective_func.weights[6] *= 1000
 
     dimer_objective_func.weights[0] = (
-        0.0  # We exclude the very first point because it's weird
+        1000.0  # We exclude the very first point because it's weird
     )
     dimer_objective_func.weights[-1] = (
         0.0  # We exclude the very last point because it's weird
@@ -281,7 +296,6 @@ if __name__ == "__main__":
     # )
 
     # clusters
-    cluster_csv = Path("./pbe_reference_configs/clusters/energies.csv")
     cluster_csv = Path("./pbe_small_clusters.csv")
 
     cluster_objective_func = create_obj_funcs_from_csv(
@@ -354,7 +368,7 @@ if __name__ == "__main__":
     dimer_cluster_obj_func = combined_objective_functions_flat(
         [dimer_objective_func, cluster_objective_func],
         weights=[
-            1.0 / dimer_objective_func.n_terms(),
+            10.0 / dimer_objective_func.n_terms(),
             1.0 / cluster_objective_func.n_terms(),
         ],
     )

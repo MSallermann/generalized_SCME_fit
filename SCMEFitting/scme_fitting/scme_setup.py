@@ -22,26 +22,6 @@ from typing import Optional, List
 
 __FOLDER__ = Path(__file__).parent.resolve()
 
-DEFAULT_PARAMETERS = {
-    "te": 1.1045 / Bohr,
-    "td": 7.5548 * Bohr,
-    "Ar": 8149.63 / Hartree,
-    "Br": -0.5515,
-    "Cr": -3.4695 * Bohr,
-    "r_Br": 1.0 / Bohr,
-    "rc_Disp": 8.0 / Bohr,
-    "rc_Core": 7.5 / Bohr,
-    "rc_Elec": 9.0 / Bohr,
-    "C6": 46.4430e0,
-    "C8": 1141.7000e0,
-    "C10": 33441.0000e0,
-    "scf_policy": pyscme.SCFPolicy.strict,
-    "scf_convcrit": 1e-8,
-    "dms": False,
-    "qms": False,
-    "NC": [0, 0, 0],
-}
-
 
 def get_rotation_matrix():
     rand = np.random.random(size=(3, 3))
@@ -104,9 +84,19 @@ def constrain_dimer(atoms: Atoms):
 class SCMEParams(BaseModel):
     te: float = 1.2 / Bohr
     td: float = 7.5548 * Bohr
-    Ar: float = 8149.63 / Hartree
-    Br: float = -0.5515
-    Cr: float = -3.4695 * Bohr
+
+    Ar_OO: float = 8149.63 / Hartree
+    Br_OO: float = -0.5515
+    Cr_OO: float = -3.4695 * Bohr
+
+    Ar_OH: float = 100.0
+    Br_OH: float = -0.5
+    Cr_OH: float = -3.5 * Bohr
+
+    Ar_HH: float = 50.0
+    Br_HH: float = -0.5
+    Cr_HH: float = -3.5 * Bohr
+
     r_Br: float = 1.0 / Bohr
 
     rc_Disp: float = 8.0 / Bohr
