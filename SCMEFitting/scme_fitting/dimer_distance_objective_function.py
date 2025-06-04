@@ -22,6 +22,7 @@ class DimerDistanceObjectiveFunction(SCMEObjectiveFunction):
         path_to_reference_configuration: Path,
         OO_distance_target: float,
         tag: Optional[str] = None,
+        dt: float = 1e-2,
         fmax: float = 1e-3,
         weight: float = 1.0,
         weight_cb: Optional[Callable[[Atoms], float]] = None,
@@ -29,6 +30,7 @@ class DimerDistanceObjectiveFunction(SCMEObjectiveFunction):
         # These are unused but we have to give them some value
         self.OO_distance_target = OO_distance_target
 
+        self.dt = dt
         self.max_steps = 2000
         self.fmax = fmax
         self.n_atoms_required = 6
@@ -66,7 +68,7 @@ class DimerDistanceObjectiveFunction(SCMEObjectiveFunction):
         )
 
         # minimize the energy of the configuration
-        opt = FIRE2(self.atoms)
+        opt = FIRE2(self.atoms, dt=self.dt)
         opt.run(fmax=self.fmax, steps=self.max_steps)
 
         self.OO_distance = self.atoms.get_distance(0, 3, mic=True)
