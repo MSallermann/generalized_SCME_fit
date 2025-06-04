@@ -1,6 +1,7 @@
 from pathlib import Path
 import numpy as np
 import pandas as pd
+from ase.io import read, write
 
 
 def assert_exists(path: Path):
@@ -23,6 +24,31 @@ def get_dimer_stretch_data(base_path: Path, E_monomer: float):
     tags = [f"dimer_C1_{p.parent.name}" for p in sorted_paths]
 
     return {"path": sorted_paths, "reference_energy": binding_energies, "tag": tags}
+
+
+def get_dimer_stretch_data_xyz(base_path: Path, E_monomer: float):
+    assert_exists(base_path)
+
+    energies_txt_file = list(base_path.glob("PES*.data"))[0]
+
+    total_energies = np.loadtxt(energies_txt_file)[:, 3]
+    n_monomers = 2
+
+    binding_energies = total_energies - n_monomers * E_monomer
+
+    path_to_xyz = list(base_path.glob("PES*.xyz"))[0]
+
+    atoms_list = read(path_to_xyz, index=":")
+    paths = [
+        path_to_xyz.parent / f"dimer_{2.4 + 0.1 * i:.1f}.xyz"
+        for i, a in enumerate(atoms_list)
+    ]
+
+    [write(p, a) for p, a in zip(paths, atoms_list)]
+
+    tags = [f"dimer_C1_{p.name}" for p in paths]
+
+    return {"path": paths, "reference_energy": binding_energies, "tag": tags}
 
 
 def get_small_clusters(base_path: Path, functional_str: str, E_monomer: float):
@@ -56,7 +82,52 @@ def get_small_clusters(base_path: Path, functional_str: str, E_monomer: float):
 
         mask = df["cluster"] == configuration_name
 
-        total_energy = np.array(df["dE"][mask])[0]
+        total_energy = np.array(df["E_cluster"][mask])[0]
+        binding_energy = total_energy - n_monomers * E_monomer
+
+        tags.append(f"{cluster_name}_{configuration_name}")
+        energies.append(binding_energy)
+
+    return {
+        "path": paths,
+        "reference_energy": energies,
+        "tag": tags,
+        "n_monomers": n_monomers_list,
+    }
+
+
+def get_small_clusters_xyz(base_path: Path, functional_str: str, E_monomer: float):
+    assert_exists(base_path)
+
+    paths = list(base_path.glob(f"*/*/{functional_str}/*.xyz"))
+    energies = []
+    tags = []
+    n_monomers_list = []
+
+    for p in paths:
+        cluster_name = p.parts[-4]  # Dimer, Hexamer, etc
+        configuration_name = p.parts[-3]  # C1, C2v, Ci etc
+
+        energy_file_path = (
+            p.parent.parent.parent / f"E_{cluster_name.lower()}_{functional_str}.txt"
+        )
+
+        assert_exists(energy_file_path)
+
+        df = pd.read_csv(energy_file_path, delimiter=" ", skiprows=1, header=None)
+        n_cols = len(df.columns)
+
+        names = [f"col{i + 1}" for i in range(n_cols)]
+        names[:4] = ["cluster", "dE/n_mon", "dE", "E_cluster"]
+
+        df.columns = names
+
+        n_monomers = len(names) - 4
+        n_monomers_list.append(n_monomers)
+
+        mask = df["cluster"] == configuration_name
+
+        total_energy = np.array(df["E_cluster"][mask])[0]
         binding_energy = total_energy - n_monomers * E_monomer
 
         tags.append(f"{cluster_name}_{configuration_name}")
@@ -104,50 +175,84 @@ path_to_scme_input = Path(
     "/home/moritz/SCME/generalized_SCME_interatomic_fit/scme_input"
 )
 
-
-#### Dimer stretch
+############################
+#       Dimer stretch
+############################
 path_to_dimer_stretch = path_to_scme_input / "Intermolecular/PES/Dimer/C1"
 
-####### PBE
+# PBE
 dimer_stretch_PBE = get_dimer_stretch_data(
     path_to_dimer_stretch / "PBE", E_monomer=E_mon_PBE
 )
 df_pbe_dimer_stretch = pd.DataFrame(dimer_stretch_PBE)
 df_pbe_dimer_stretch.to_csv("pbe_dimer_stretch.csv")
 
-
-####### BEEF
+# BEEF
 dimer_stretch_beef = get_dimer_stretch_data(
     path_to_dimer_stretch / "BEEF-vdW", E_monomer=E_mon_BEEF_vdW
 )
 df_beef_dimer_stretch = pd.DataFrame(dimer_stretch_beef)
 df_beef_dimer_stretch.to_csv("beef_dimer_stretch.csv")
 
-#### Small clusters
+# BLYP
+dimer_stretch_blyp = get_dimer_stretch_data_xyz(
+    path_to_dimer_stretch / "BLYP", E_monomer=E_mon_BLYP
+)
+
+df_blyp_dimer_stretch = pd.DataFrame(dimer_stretch_blyp)
+df_blyp_dimer_stretch.to_csv("blyp_dimer_stretch.csv")
+
+# RPBE
+dimer_stretch_rpbe = get_dimer_stretch_data_xyz(
+    path_to_dimer_stretch / "RPBE", E_monomer=E_mon_RPBE
+)
+df_rpbe_dimer_stretch = pd.DataFrame(dimer_stretch_rpbe)
+df_rpbe_dimer_stretch.to_csv("rpbe_dimer_stretch.csv")
+
+############################
+#      Small clusters
+############################
 path_to_small_clusters = path_to_scme_input / "Intermolecular/Clusters/Small"
 
-####### PBE
+# PBE
 small_clusters_PBE = get_small_clusters(
     path_to_small_clusters, functional_str="PBE", E_monomer=E_mon_PBE
 )
 df_small_clusters_PBE = pd.DataFrame(small_clusters_PBE)
 df_small_clusters_PBE.to_csv("pbe_small_clusters.csv")
 
-####### BEEF
+# BEEF
 small_clusters_beef = get_small_clusters(
     path_to_small_clusters, functional_str="BEEF-vdW", E_monomer=E_mon_BEEF_vdW
 )
 df_small_clusters_beef = pd.DataFrame(small_clusters_beef)
 df_small_clusters_beef.to_csv("beef_small_clusters.csv")
 
-#### ICE
+# BLYP
+small_clusters_blyp = get_small_clusters_xyz(
+    path_to_small_clusters, functional_str="BLYP", E_monomer=E_mon_BLYP
+)
+
+df_blyp_small_clusters = pd.DataFrame(small_clusters_blyp)
+df_blyp_small_clusters.to_csv("blyp_small_clusters.csv")
+
+# RPBE
+small_clusters_rpbe = get_small_clusters_xyz(
+    path_to_small_clusters, functional_str="RPBE", E_monomer=E_mon_RPBE
+)
+df_rpbe_small_clusters = pd.DataFrame(small_clusters_rpbe)
+df_rpbe_small_clusters.to_csv("rpbe_small_clusters.csv")
+
+############################
+#            ICE
+############################
 path_to_ice = path_to_scme_input / "Intermolecular/Crystals/Ice-IH"
-####### PBE
+# PBE
 ice_pbe = get_ice(path_to_ice, functional_str="PBE", E_monomer=E_mon_PBE)
 df_ice_pbe = pd.DataFrame(ice_pbe)
 df_ice_pbe.to_csv("pbe_ice.csv")
 
-####### BEEF
+# BEEF
 ice_beef = get_ice(path_to_ice, functional_str="BEEF-vdW", E_monomer=E_mon_BEEF_vdW)
 df_ice_beef = pd.DataFrame(ice_beef)
 df_ice_beef.to_csv("beef_ice.csv")

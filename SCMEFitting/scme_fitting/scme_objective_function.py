@@ -92,7 +92,7 @@ class SCMEObjectiveFunction:
             Atoms object with SCME calculator attached and ready for energy eval.
         """
         logger.debug(f"Loading configuration from {path_to_configuration}")
-        atoms = read(path_to_configuration)
+        atoms = read(path_to_configuration, index=0)
 
         # If the first check does not pass, we will try to fix the order of atoms
         if not check_water_is_in_OHH_order(atoms):

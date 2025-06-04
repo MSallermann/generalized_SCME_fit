@@ -79,11 +79,15 @@ def find_shift_energy(params):
 
 if __name__ == "__main__":
     # FILE = "output/params_atomic_units.hdf5"
-    FILE_IN = "output_beef/trained_params_atomic.hdf5"
-    FILE_OUT = "output_beef/trained_params_atomic_shifted.hdf5"
+
+    # FILE_IN = "output_beef/trained_params_atomic.hdf5"
+    # FILE_OUT = "output_beef/trained_params_atomic_shifted.hdf5"
 
     # FILE_IN = "output_rpbe/trained_params_atomic.hdf5"
     # FILE_OUT = "output_rpbe/trained_params_atomic_shifted.hdf5"
+
+    FILE_IN = "output_blyp/trained_params_atomic.hdf5"
+    FILE_OUT = "output_blyp/trained_params_atomic_shifted.hdf5"
 
     params = read_params_from_file(FILE_IN)
 

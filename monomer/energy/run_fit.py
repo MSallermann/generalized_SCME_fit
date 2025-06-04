@@ -103,17 +103,23 @@ def fit(path_csv, r_e, theta_e, output_dir):
         skip_zero=cfg["skip_zero"],
     )
 
-
 # BEEF
 path_csv = "./input/DATA_BEEF_energy.csv"
 r_e = 0.964 * fitting.ureg.angstrom
 theta_e = 104.3 * fitting.ureg.degree
 theta_e = theta_e.to(fitting.ureg.radian)
-fit(path_csv, r_e, theta_e, "./output_beef")
+# fit(path_csv, r_e, theta_e, "./output_beef")
 
 # RPBE
 path_csv = "./input/DATA_RPBE_energy_reflected.csv"
 r_e = 0.972 * fitting.ureg.angstrom
 theta_e = 103.8 * fitting.ureg.degree
 theta_e = theta_e.to(fitting.ureg.radian)
-fit(path_csv, r_e, theta_e, "./output_rpbe")
+# fit(path_csv, r_e, theta_e, "./output_rpbe")
+
+# BLYP
+path_csv = "./input/BLYP_H2O_energy.csv"
+r_e = 0.973 * fitting.ureg.angstrom
+theta_e = 104.4 * fitting.ureg.degree
+theta_e = theta_e.to(fitting.ureg.radian)
+fit(path_csv, r_e, theta_e, "./output_blyp")
