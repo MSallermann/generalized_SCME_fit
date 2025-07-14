@@ -8,6 +8,7 @@ from scme_fitting.dimer_distance_objective_function import (
 
 from scme_fitting.combined_objective_function import CombinedObjectiveFunction
 
+import numpy as np
 
 import logging
 import matplotlib.pyplot as plt
@@ -88,7 +89,6 @@ def make_plots(
     plt.close()
     ax = plt.gca()
     fig = plt.gcf()
-
     ax.plot(
         tags, energy_reference / n_atoms, marker="o", color="black", label="reference"
     )
@@ -101,6 +101,28 @@ def make_plots(
     ax.legend()
     fig.tight_layout()
     fig.savefig(output_folder / "plot_energy.png", dpi=300)
+    plt.close()
+
+    ax = plt.gca()
+    fig = plt.gcf()
+
+    residuals = np.abs(energy_reference - energy_fitted) / n_atoms
+    avg_residual = np.mean(residuals)
+
+    ax.plot(
+        tags,
+        residuals,
+        marker="o",
+        color="black",
+        label=f"residuals (mean={avg_residual:.2e})",
+    )
+
+    ax.set_xticks(range(len(energy_reference)))
+    ax.set_xticklabels(tags, rotation=90)
+    ax.set_ylabel("|pred-target| [eV] / n_atoms")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_folder / "plot_residuals.png", dpi=300)
 
 
 def write_output(
@@ -253,7 +275,7 @@ if __name__ == "__main__":
         "C8",
         "C10",
     ]
-    budget = 5000
+    budget = 1000
 
     # Construct objective functions
     # dimer
@@ -273,7 +295,7 @@ if __name__ == "__main__":
     # dimer_objective_func.weights[6] *= 1000
 
     dimer_objective_func.weights[0] = (
-        1000.0  # We exclude the very first point because it's weird
+        0.0  # We exclude the very first point because it's weird
     )
     dimer_objective_func.weights[-1] = (
         0.0  # We exclude the very last point because it's weird

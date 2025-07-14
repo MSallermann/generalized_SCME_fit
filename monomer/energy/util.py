@@ -81,6 +81,8 @@ def get_exponent_arrays(
 
 
 def write_params_to_file(params, file, exponent_max, exponent_sum_max, skip_zero):
+    Path(file).parent.mkdir(exist_ok=True, parents=True)
+
     with h5py.File(file, "w") as f:
         energy = f.create_group("energy")
 

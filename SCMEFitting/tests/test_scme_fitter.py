@@ -9,7 +9,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 
-logging.basicConfig(filename="test_scme_fitter.log", level=logging.INFO)
+logging.basicConfig(filename="test_scme_fitter.log", level=logging.DEBUG)
 
 
 def create_scme_fit_data(base_path: Path):

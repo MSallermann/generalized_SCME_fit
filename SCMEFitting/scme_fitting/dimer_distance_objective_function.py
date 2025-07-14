@@ -4,7 +4,7 @@ from .scme_setup import (
 
 from .scme_objective_function import SCMEObjectiveFunction
 from ase import Atoms
-from ase.optimize import FIRE2, BFGS
+from ase.optimize import FIRE2
 from typing import Optional, Dict, Callable
 from pathlib import Path
 import logging

@@ -89,13 +89,13 @@ class SCMEParams(BaseModel):
     Br_OO: float = -0.5515
     Cr_OO: float = -3.4695 * Bohr
 
-    Ar_OH: float = 100.0
-    Br_OH: float = -0.5
-    Cr_OH: float = -3.5 * Bohr
+    Ar_OH: float = 0.0  # 100.0
+    Br_OH: float = 0.0  # -0.5
+    Cr_OH: float = 0.0  # -3.5 * Bohr
 
-    Ar_HH: float = 50.0
-    Br_HH: float = -0.5
-    Cr_HH: float = -3.5 * Bohr
+    Ar_HH: float = 0.0  # 50.0
+    Br_HH: float = 0.0  # -0.5
+    Cr_HH: float = 0.0  # -3.5 * Bohr
 
     r_Br: float = 1.0 / Bohr
 
